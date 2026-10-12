@@ -116,15 +116,17 @@ def converter(registros_brutos):
 
 
 def manter_somente_mudancas(registros):
-    """Mantém só os pontos em que o valor mudou (+ o último ponto)."""
+    """Mantém só os pontos em que o valor mudou.
+
+    O site estende a linha até a data de hoje, então não é preciso guardar o
+    último dia. Assim o arquivo só muda quando a Selic realmente muda.
+    """
     if not registros:
         return registros
     resultado = [registros[0]]
     for anterior, atual in zip(registros, registros[1:]):
         if atual["valor"] != anterior["valor"]:
             resultado.append(atual)
-    if resultado[-1] != registros[-1]:
-        resultado.append(registros[-1])  # garante a data mais recente
     return resultado
 
 
@@ -161,6 +163,19 @@ def atualizar_serie(chave: str, cfg: dict) -> bool:
     if cfg["somente_mudancas"]:
         registros = manter_somente_mudancas(registros)
 
+    caminho = PASTA_DADOS / f"{chave}.json"
+
+    # Se os dados são idênticos aos do arquivo atual, não regrava. Assim o
+    # GitHub Actions só faz commit quando há informação nova de verdade.
+    if caminho.exists():
+        try:
+            with open(caminho, encoding="utf-8") as f:
+                if json.load(f).get("dados") == registros:
+                    print(f"Sem mudanças em '{chave}'. Arquivo mantido.")
+                    return True
+        except (OSError, ValueError):
+            pass  # arquivo ilegível: regrava
+
     conteudo = {
         "serie": chave,
         "codigo_sgs": cfg["codigo"],
@@ -169,10 +184,9 @@ def atualizar_serie(chave: str, cfg: dict) -> bool:
         "frequencia": cfg["frequencia"],
         "fonte": cfg["fonte"],
         "atualizado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "ultimo_ponto": registros[-1],
         "dados": registros,
     }
-    salvar_json(PASTA_DADOS / f"{chave}.json", conteudo)
+    salvar_json(caminho, conteudo)
     print(
         f"OK: {len(registros)} pontos salvos "
         f"(de {total_original} originais). Último: {registros[-1]}"

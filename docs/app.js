@@ -91,6 +91,12 @@ function criarGrafico(ind, json) {
   const ctx = document.getElementById(`grafico-${ind.id}`);
 
   const pontos = json.dados.map((d) => ({ x: d.data, y: d.valor }));
+  if (ind.escalonado) {
+    // O JSON guarda só as mudanças; estende o último valor até hoje.
+    const hoje = new Date().toISOString().slice(0, 10);
+    const ultimo = pontos[pontos.length - 1];
+    if (ultimo.x < hoje) pontos.push({ x: hoje, y: ultimo.y });
+  }
 
   estado.graficos[ind.id] = new Chart(ctx, {
     type: "line",
@@ -226,7 +232,7 @@ async function iniciar() {
   if (datas.length) {
     const quando = new Date(datas[datas.length - 1]).toLocaleString("pt-BR");
     document.getElementById("atualizado").textContent =
-      `Dados atualizados em ${quando}.`;
+      `Última atualização dos dados: ${quando}.`;
   }
 
   window
