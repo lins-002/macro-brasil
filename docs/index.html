@@ -4,12 +4,59 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Macro Brasil</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 4rem auto; padding: 0 1rem; line-height: 1.5; }
-  </style>
+  <meta name="description" content="Indicadores da macroeconomia brasileira: IPCA, Selic e mais.">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>Macro Brasil</h1>
-  <p>Site em construção. Em breve: IPCA, Selic e outros indicadores da economia brasileira.</p>
+  <header class="topo">
+    <h1>Macro Brasil</h1>
+    <p class="sub">Indicadores da economia brasileira, direto das fontes oficiais.</p>
+  </header>
+
+  <main>
+    <section class="kpis" aria-label="Indicadores atuais">
+      <article class="kpi" id="kpi-ipca">
+        <h2>IPCA acumulado em 12 meses</h2>
+        <p class="valor">…</p>
+        <p class="detalhe">Carregando</p>
+      </article>
+      <article class="kpi" id="kpi-selic">
+        <h2>Meta Selic</h2>
+        <p class="valor">…</p>
+        <p class="detalhe">Carregando</p>
+      </article>
+    </section>
+
+    <div class="controles" role="group" aria-label="Período dos gráficos">
+      <span>Período:</span>
+      <button type="button" data-anos="5">5 anos</button>
+      <button type="button" data-anos="10">10 anos</button>
+      <button type="button" data-anos="20" class="ativo">20 anos</button>
+      <button type="button" data-anos="0">Tudo</button>
+    </div>
+
+    <section class="cartao">
+      <h2>IPCA acumulado em 12 meses</h2>
+      <p class="fonte">Fonte: IBGE / Banco Central (SGS 13522)</p>
+      <div class="grafico"><canvas id="grafico-ipca" role="img" aria-label="Gráfico do IPCA acumulado em 12 meses"></canvas></div>
+      <p class="erro" id="erro-ipca" hidden></p>
+    </section>
+
+    <section class="cartao">
+      <h2>Meta Selic</h2>
+      <p class="fonte">Fonte: Banco Central (SGS 432)</p>
+      <div class="grafico"><canvas id="grafico-selic" role="img" aria-label="Gráfico da meta Selic"></canvas></div>
+      <p class="erro" id="erro-selic" hidden></p>
+    </section>
+  </main>
+
+  <footer class="rodape">
+    <p>Projeto pessoal, sem fins comerciais. Dados públicos do Banco Central do Brasil e do IBGE.</p>
+    <p id="atualizado"></p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

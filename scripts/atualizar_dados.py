@@ -23,7 +23,9 @@ import requests
 # Configuração
 # ----------------------------------------------------------------------
 RAIZ = Path(__file__).resolve().parent.parent
-PASTA_DADOS = RAIZ / "data"
+# O GitHub Pages só publica o conteúdo de docs/, então os JSONs ficam lá dentro
+# para o site conseguir lê-los.
+PASTA_DADOS = RAIZ / "docs" / "data"
 
 URL_BASE = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.{codigo}/dados"
 TENTATIVAS = 3
