@@ -1,0 +1,58 @@
+name: Atualizar dados
+
+on:
+  # Todo dia às 08:00 no horário de Brasília (11:00 UTC)
+  schedule:
+    - cron: "0 11 * * *"
+  # Permite rodar manualmente pela aba Actions (botão "Run workflow")
+  workflow_dispatch:
+
+# Permissão para o robô gravar os JSONs atualizados no repositório
+permissions:
+  contents: write
+
+# Evita duas execuções ao mesmo tempo
+concurrency:
+  group: atualizar-dados
+  cancel-in-progress: false
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Baixar o repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Coletar dados do Banco Central
+        id: coleta
+        continue-on-error: true
+        run: python scripts/atualizar_dados.py
+
+      - name: Gravar mudanças (se houver)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data
+          if git diff --cached --quiet; then
+            echo "Nenhuma mudança nos dados."
+          else
+            git commit -m "Atualiza dados (automático)"
+            git push
+          fi
+
+      # Se a coleta falhou, marca a execução como falha para o GitHub avisar por e-mail
+      - name: Avisar se a coleta falhou
+        if: steps.coleta.outcome == 'failure'
+        run: |
+          echo "A coleta falhou para pelo menos uma série. Veja o log do passo anterior."
+          exit 1
