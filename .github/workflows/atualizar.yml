@@ -1,9 +1,11 @@
 name: Atualizar dados
 
 on:
-  # Todo dia às 08:00 no horário de Brasília (11:00 UTC)
+  # Todo dia às ~08:17 no horário de Brasília (11:17 UTC).
+  # O minuto 17 (e não 00) evita o pico de horário cheio, quando o GitHub
+  # costuma atrasar ou descartar execuções agendadas.
   schedule:
-    - cron: "0 11 * * *"
+    - cron: "17 11 * * *"
   # Permite rodar manualmente pela aba Actions (botão "Run workflow")
   workflow_dispatch:
 
@@ -19,7 +21,7 @@ concurrency:
 jobs:
   atualizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Baixar o repositório
         uses: actions/checkout@v4
@@ -33,10 +35,24 @@ jobs:
       - name: Instalar dependências
         run: pip install -r requirements.txt
 
+      # A API do Banco Central às vezes fica instável. Se a coleta falhar, espera
+      # 2 minutos e tenta de novo (até 3 vezes). É seguro repetir: o que já foi
+      # coletado com sucesso não é regravado.
       - name: Coletar dados do Banco Central
         id: coleta
         continue-on-error: true
-        run: python scripts/atualizar_dados.py
+        run: |
+          for tentativa in 1 2 3; do
+            echo "=== Tentativa $tentativa de 3 ==="
+            if python scripts/atualizar_dados.py; then
+              exit 0
+            fi
+            if [ "$tentativa" -lt 3 ]; then
+              echo "Falhou. Aguardando 2 minutos para tentar de novo..."
+              sleep 120
+            fi
+          done
+          exit 1
 
       - name: Gravar mudanças (se houver)
         run: |
@@ -54,5 +70,5 @@ jobs:
       - name: Avisar se a coleta falhou
         if: steps.coleta.outcome == 'failure'
         run: |
-          echo "A coleta falhou para pelo menos uma série. Veja o log do passo anterior."
+          echo "A coleta falhou para pelo menos uma série. Veja o log do passo 'Coletar dados do Banco Central'."
           exit 1
