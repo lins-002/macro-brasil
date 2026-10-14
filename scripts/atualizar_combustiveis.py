@@ -5,12 +5,17 @@ A ANP publica arquivos por semestre (ca-AAAA-01 e ca-AAAA-02), e o arquivo do
 semestre em andamento é atualizado toda semana. Por isso o fluxo mensal é:
 baixar só o arquivo do semestre atual e rodar este script.
 
-Uso:
-    # 1) Só regenera o JSON do site a partir do consolidado atual:
+Uso (o mais simples): coloque o arquivo baixado da ANP (o .zip, sem extrair) na
+pasta "novos" e rode sem argumentos. No Windows, basta dar duplo clique em
+ATUALIZAR_COMBUSTIVEIS.bat. Equivale a:
     python scripts/atualizar_combustiveis.py
 
-    # 2) Atualiza com um arquivo baixado da ANP (CSV ou ZIP) e regenera o JSON:
+Outras opções:
+    # Indicar o arquivo direto (neste caso ele NÃO é movido para novos/processados):
     python scripts/atualizar_combustiveis.py "C:/Downloads/ca-2026-02.zip"
+
+    # Só regenerar o JSON do site a partir do consolidado atual:
+    python scripts/atualizar_combustiveis.py --so-json
 
 Requer:  pip install pandas
 
@@ -31,7 +36,10 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-import pandas as pd
+try:
+    import pandas as pd
+except ModuleNotFoundError:
+    sys.exit("Falta instalar o pandas. Rode:  python -m pip install pandas")
 
 # ----------------------------------------------------------------------
 # Configuração
@@ -39,6 +47,8 @@ import pandas as pd
 RAIZ = Path(__file__).resolve().parent.parent
 CSV_CONSOLIDADO = RAIZ / "fonte" / "anp_consolidado.csv"
 JSON_SAIDA = RAIZ / "docs" / "data" / "combustiveis.json"
+PASTA_NOVOS = RAIZ / "novos"  # aqui você coloca o arquivo baixado da ANP
+PASTA_PROCESSADOS = PASTA_NOVOS / "processados"  # arquivos já usados vão para cá
 
 # Colunas do arquivo bruto da ANP que usamos
 COL_REGIAO = "Regiao - Sigla"
@@ -316,38 +326,87 @@ def gerar_json(df: pd.DataFrame):
 
 
 # ----------------------------------------------------------------------
+def achar_arquivos_novos():
+    """Arquivos .zip/.csv soltos na pasta novos/ (não olha dentro de processados/)."""
+    if not PASTA_NOVOS.exists():
+        return []
+    achados = [
+        p for p in PASTA_NOVOS.iterdir()
+        if p.is_file() and p.suffix.lower() in (".zip", ".csv")
+    ]
+    return sorted(achados, key=lambda p: p.name.lower())
+
+
+def guardar_processado(caminho: Path):
+    """Move o arquivo usado para novos/processados/ (nunca sobrescreve outro)."""
+    PASTA_PROCESSADOS.mkdir(parents=True, exist_ok=True)
+    destino = PASTA_PROCESSADOS / caminho.name
+    if destino.exists():
+        carimbo = datetime.now().strftime("%Y%m%d-%H%M%S")
+        destino = PASTA_PROCESSADOS / f"{caminho.stem}_{carimbo}{caminho.suffix}"
+    caminho.replace(destino)
+
+
 def main() -> int:
     analisador = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     analisador.add_argument(
         "arquivos",
         nargs="*",
-        help="Arquivo(s) da ANP (.csv ou .zip), ex.: ca-2026-02.zip. "
-        "Sem argumentos, só regenera o JSON.",
+        help="(opcional) Arquivo(s) da ANP, ex.: ca-2026-02.zip. "
+        "Sem isso, o script usa os arquivos da pasta novos/.",
+    )
+    analisador.add_argument(
+        "--so-json",
+        action="store_true",
+        help="Não lê arquivos novos; só regenera o JSON a partir do consolidado.",
     )
     args = analisador.parse_args()
 
     try:
         consolidado = ler_consolidado()
+
+        if args.so_json:
+            if consolidado.empty:
+                raise ValueError(f"{CSV_CONSOLIDADO} não existe ou está vazio.")
+            gerar_json(consolidado)
+            return 0
+
         if args.arquivos:
-            for texto in args.arquivos:
-                caminho = Path(texto)
-                if not caminho.exists():
-                    raise FileNotFoundError(f"Arquivo não encontrado: {caminho}")
-                permitidos = meses_do_semestre(caminho)
-                if permitidos is None:
-                    print(
-                        "  Aviso: não consegui deduzir o semestre pelo nome do arquivo "
-                        "(esperado ca-AAAA-01 ou ca-AAAA-02); usando todos os meses dele."
-                    )
-                novo = agregar_arquivo(caminho)
-                consolidado = mesclar(consolidado, novo, permitidos)
-            salvar_consolidado(consolidado)
-        elif consolidado.empty:
-            raise ValueError(
-                f"{CSV_CONSOLIDADO} não existe ou está vazio. "
-                "Coloque o consolidado em fonte/ ou passe um arquivo da ANP."
-            )
+            lista, mover = [Path(t) for t in args.arquivos], False
+        else:
+            lista, mover = achar_arquivos_novos(), True
+            if not lista:
+                print(f"Nenhum arquivo novo encontrado em: {PASTA_NOVOS}")
+                print(
+                    "Baixe o arquivo do semestre atual no site da ANP, coloque nessa "
+                    "pasta (pode ser o .zip, sem extrair) e rode de novo."
+                )
+                print("Nada foi alterado.")
+                return 1
+
+        for caminho in lista:
+            if not caminho.exists():
+                raise FileNotFoundError(f"Arquivo não encontrado: {caminho}")
+            permitidos = meses_do_semestre(caminho)
+            if permitidos is None:
+                print(
+                    "  Aviso: não consegui deduzir o semestre pelo nome do arquivo "
+                    "(esperado ca-AAAA-01 ou ca-AAAA-02); usando todos os meses dele."
+                )
+            novo = agregar_arquivo(caminho)
+            consolidado = mesclar(consolidado, novo, permitidos)
+
+        # Só grava depois que TODOS os arquivos foram lidos sem erro.
+        salvar_consolidado(consolidado)
         gerar_json(consolidado)
+        if mover:
+            for caminho in lista:
+                guardar_processado(caminho)
+            print(f"Arquivos usados foram movidos para: {PASTA_PROCESSADOS}")
+
+        print("\nPRONTO! Agora envie estes 2 arquivos para o GitHub:")
+        print(f"  1) {JSON_SAIDA}   (no GitHub: pasta docs > data)")
+        print(f"  2) {CSV_CONSOLIDADO}   (no GitHub: pasta fonte)")
     except (ValueError, FileNotFoundError, zipfile.BadZipFile) as erro:
         print(f"ERRO: {erro}")
         print("Nada foi alterado.")
