@@ -1,9 +1,10 @@
 """
 Atualiza os dados de combustíveis automotivos da ANP.
 
-A ANP publica arquivos por semestre (ca-AAAA-01 e ca-AAAA-02), e o arquivo do
-semestre em andamento é atualizado toda semana. Por isso o fluxo mensal é:
-baixar só o arquivo do semestre atual e rodar este script.
+A ANP publica os dados em arquivos semestrais (ca-AAAA-01 e ca-AAAA-02) e também em
+arquivos mensais, em 3 partes (ex.: 09-dados-abertos-precos-2026-09-gasolina-etanol.csv,
+...-diesel-gnv.csv e ...-glp.csv). GLP semestral: glp-AAAA-01 / glp-AAAA-02. Este script
+aceita todos esses tipos.
 
 Uso (o mais simples): coloque o arquivo baixado da ANP (o .zip, sem extrair) na
 pasta "novos" e rode sem argumentos. No Windows, basta dar duplo clique em
@@ -23,9 +24,11 @@ Arquivos:
     fonte/anp_consolidado.csv   base acumulada (soma e contagem por UF/produto/mês)
     docs/data/combustiveis.json arquivo lido pelo site
 
-Regra de atualização: os meses do semestre do arquivo novo SUBSTITUEM os meses
-correspondentes do consolidado (o resto do histórico não muda). Rodar duas
-vezes com o mesmo arquivo dá o mesmo resultado.
+Regra de atualização: para cada par (mês, produto) presente no arquivo novo, os dados
+antigos são SUBSTITUÍDOS pelos novos (nada é somado). Por isso usar o mesmo arquivo
+duas vezes, ou o .zip e o .csv extraído dele, não duplica nada. O resto do histórico
+não muda. Os 3 arquivos de um mesmo mês (gasolina+etanol, diesel+GNV e GLP) podem ser
+processados juntos ou em momentos diferentes.
 """
 
 import argparse
@@ -57,6 +60,8 @@ COL_PRODUTO = "Produto"
 COL_DATA = "Data da Coleta"
 COL_VALOR = "Valor de Venda"
 COLUNAS_BRUTO = {COL_REGIAO, COL_UF, COL_PRODUTO, COL_DATA, COL_VALOR}
+COL_UNIDADE = "Unidade de Medida"  # opcional: usada para manter só o botijão de 13 kg
+COLUNAS_LIDAS = COLUNAS_BRUTO | {COL_UNIDADE}
 
 # Colunas do consolidado (mesmo formato do seu parser)
 COLUNAS_CONSOLIDADO = [
@@ -78,10 +83,14 @@ PRODUTOS = [
     ("DIESEL S10", "Diesel S10", "litro"),
     ("DIESEL S50", "Diesel S50", "litro"),
     ("GNV", "GNV", "m³"),
+    ("GLP", "GLP (botijão 13 kg)", "botijão 13 kg"),
 ]
 
 TAMANHO_PEDACO = 300_000  # linhas lidas por vez (economiza memória)
-VALOR_MAXIMO = 100.0  # preços acima disso são tratados como erro de digitação
+# Preços acima do limite são tratados como erro de digitação e ignorados.
+# O botijão de GLP custa de ~R$ 80 a ~R$ 170, então precisa de um limite maior.
+VALOR_MAXIMO_PADRAO = 100.0
+VALOR_MAXIMO_POR_PRODUTO = {"GLP": 500.0}
 
 
 # ----------------------------------------------------------------------
@@ -109,7 +118,7 @@ def agregar_arquivo(caminho: Path) -> pd.DataFrame:
     """Lê o arquivo bruto e devolve soma e contagem por UF/produto/mês."""
     print(f"Lendo {caminho.name} ...")
     parciais = []
-    estat = {"linhas": 0, "sem_valor": 0, "valor_invalido": 0, "sem_data": 0}
+    estat = {"linhas": 0, "sem_valor": 0, "valor_invalido": 0, "sem_data": 0, "outro_tamanho": 0}
 
     arquivo, pacote = abrir_bruto(caminho)
     try:
@@ -118,7 +127,7 @@ def agregar_arquivo(caminho: Path) -> pd.DataFrame:
             sep=";",
             encoding="latin1",
             dtype=str,
-            usecols=lambda c: limpar_nome_coluna(c) in COLUNAS_BRUTO,
+            usecols=lambda c: limpar_nome_coluna(c) in COLUNAS_LIDAS,
             chunksize=TAMANHO_PEDACO,
         )
         for numero, pedaco in enumerate(leitor, start=1):
@@ -142,16 +151,30 @@ def agregar_arquivo(caminho: Path) -> pd.DataFrame:
                     texto_data[faltou], format="%Y-%m-%d", errors="coerce"
                 )
 
-            valor_ok = valor.notna() & (valor > 0) & (valor < VALOR_MAXIMO)
+            produto_up = pedaco[COL_PRODUTO].str.strip().str.upper()
+            limite = produto_up.map(VALOR_MAXIMO_POR_PRODUTO).fillna(VALOR_MAXIMO_PADRAO)
+            valor_ok = valor.notna() & (valor > 0) & (valor < limite)
+
+            # GLP: mantém só o botijão de 13 kg (ignora outros tamanhos, se houver).
+            # Se a coluna de unidade não existir ou estiver vazia, não descarta nada.
+            outro_tamanho = pd.Series(False, index=pedaco.index)
+            if COL_UNIDADE in pedaco.columns:
+                unidade = pedaco[COL_UNIDADE].fillna("").str.replace(" ", "", regex=False)
+                outro_tamanho = (
+                    produto_up.str.startswith("GLP", na=False)
+                    & (unidade != "")
+                    & ~unidade.str.contains("13", regex=False)
+                )
             tem_chaves = (
                 pedaco[COL_UF].notna() & pedaco[COL_PRODUTO].notna() & pedaco[COL_REGIAO].notna()
             )
-            ok = valor_ok & data.notna() & tem_chaves
+            ok = valor_ok & data.notna() & tem_chaves & ~outro_tamanho
 
             estat["linhas"] += len(pedaco)
             estat["sem_valor"] += int(valor.isna().sum())
             estat["valor_invalido"] += int((valor.notna() & ~valor_ok).sum())
             estat["sem_data"] += int(data.isna().sum())
+            estat["outro_tamanho"] += int(outro_tamanho.sum())
 
             limpo = pd.DataFrame(
                 {
@@ -186,19 +209,32 @@ def agregar_arquivo(caminho: Path) -> pd.DataFrame:
         f"  {estat['linhas']} linhas lidas | sem preço: {estat['sem_valor']} | "
         f"preço inválido: {estat['valor_invalido']} | sem data: {estat['sem_data']}"
     )
+    if estat["outro_tamanho"]:
+        print(f"  GLP de outros tamanhos (não é 13 kg) ignorados: {estat['outro_tamanho']}")
     if total["n"].sum() < 1000:
         raise ValueError(f"{caminho.name}: poucas cotações válidas ({total['n'].sum()}).")
     return total
 
 
-def meses_do_semestre(caminho: Path):
-    """Deduz os meses do arquivo a partir do nome (ca-AAAA-01 ou ca-AAAA-02)."""
-    achou = re.search(r"ca-(\d{4})-0([12])", caminho.name, re.IGNORECASE)
-    if not achou:
-        return None
-    ano, semestre = int(achou.group(1)), int(achou.group(2))
-    inicio = 1 if semestre == 1 else 7
-    return {f"{ano}-{m:02d}" for m in range(inicio, inicio + 6)}
+def meses_do_nome(caminho: Path):
+    """Deduz os meses esperados no arquivo pelo nome.
+
+    Semestral: ca-AAAA-01 / ca-AAAA-02 (combustíveis) ou glp-AAAA-01 / glp-AAAA-02 (GLP).
+    Mensal:    ...precos-AAAA-MM... (ex.: 09-dados-abertos-precos-2026-09-diesel-gnv.csv)
+    Devolve (conjunto de meses, descrição) ou (None, None) se não reconhecer.
+    """
+    nome = caminho.name
+    achou = re.search(r"(?<![a-z])(?:ca|glp)-(\d{4})-0([12])(?!\d)", nome, re.IGNORECASE)
+    if achou:
+        ano, semestre = int(achou.group(1)), int(achou.group(2))
+        inicio = 1 if semestre == 1 else 7
+        meses = {f"{ano}-{m:02d}" for m in range(inicio, inicio + 6)}
+        return meses, f"{semestre}º semestre de {ano}"
+    achou = re.search(r"precos-(\d{4})-(0[1-9]|1[0-2])(?!\d)", nome, re.IGNORECASE)
+    if achou:
+        mes = f"{achou.group(1)}-{achou.group(2)}"
+        return {mes}, f"mês {mes}"
+    return None, None
 
 
 # ----------------------------------------------------------------------
@@ -218,26 +254,41 @@ def ler_consolidado() -> pd.DataFrame:
 
 
 def mesclar(consolidado: pd.DataFrame, novo: pd.DataFrame, permitidos) -> pd.DataFrame:
-    """Os meses presentes no arquivo novo substituem os do consolidado."""
+    """Substitui no consolidado cada par (mês, produto) que existe no arquivo novo.
+
+    Nada é somado ao que já existia: o dado novo toma o lugar do antigo. Assim,
+    processar o mesmo arquivo de novo (ou uma cópia dele) não duplica linhas, e os
+    produtos que NÃO estão no arquivo (ex.: diesel, ao ler o arquivo de gasolina)
+    ficam intactos.
+    """
     if permitidos is not None:
         fora = novo[~novo["mes"].isin(permitidos)]
         if len(fora):
             print(
-                f"  Aviso: {int(fora['n'].sum())} cotações fora do semestre "
+                f"  Aviso: {int(fora['n'].sum())} cotações de outros meses "
                 f"({sorted(fora['mes'].unique())}) foram ignoradas."
             )
         novo = novo[novo["mes"].isin(permitidos)]
     if novo.empty:
-        raise ValueError("Nenhum mês válido no arquivo para este semestre.")
+        raise ValueError(
+            "Nenhum dado do mês/semestre indicado no nome do arquivo. "
+            "Confira se é o arquivo certo."
+        )
 
-    meses_novos = sorted(novo["mes"].unique())
-    antes = int(consolidado["mes"].isin(meses_novos).sum())
+    chaves_novas = set(zip(novo["mes"], novo["produto"]))
+    sera_trocada = [chave in chaves_novas for chave in zip(consolidado["mes"], consolidado["produto"])]
+    antigas = consolidado[sera_trocada]
     resultado = pd.concat(
-        [consolidado[~consolidado["mes"].isin(meses_novos)], novo], ignore_index=True
+        [consolidado[[not t for t in sera_trocada]], novo], ignore_index=True
+    )
+    meses_novos = sorted(novo["mes"].unique())
+    produtos = sorted(novo["produto"].unique())
+    print(
+        f"  Meses: {meses_novos[0]} a {meses_novos[-1]} | produtos: {', '.join(produtos)}"
     )
     print(
-        f"  Meses atualizados: {meses_novos[0]} a {meses_novos[-1]} "
-        f"({len(meses_novos)} meses; {antes} linhas antigas -> {len(novo)} novas)"
+        f"  Cotações: {int(novo['n'].sum())} no arquivo; "
+        f"{int(antigas['n'].sum())} já existiam e foram substituídas (não somadas)."
     )
     return resultado
 
@@ -295,7 +346,7 @@ def gerar_json(df: pd.DataFrame):
     )
     conteudo = {
         "serie": "combustiveis",
-        "nome": "Preço médio de revenda dos combustíveis automotivos",
+        "nome": "Preço médio de revenda dos combustíveis automotivos e do GLP",
         "fonte": "ANP - Levantamento de Preços de Combustíveis",
         "atualizado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "ultimo_mes": meses[-1],
@@ -327,14 +378,16 @@ def gerar_json(df: pd.DataFrame):
 
 # ----------------------------------------------------------------------
 def achar_arquivos_novos():
-    """Arquivos .zip/.csv soltos na pasta novos/ (não olha dentro de processados/)."""
+    """Todos os .zip/.csv dentro de novos/, inclusive em subpastas (exceto processados/)."""
     if not PASTA_NOVOS.exists():
         return []
     achados = [
-        p for p in PASTA_NOVOS.iterdir()
-        if p.is_file() and p.suffix.lower() in (".zip", ".csv")
+        p for p in PASTA_NOVOS.rglob("*")
+        if p.is_file()
+        and p.suffix.lower() in (".zip", ".csv")
+        and PASTA_PROCESSADOS not in p.parents
     ]
-    return sorted(achados, key=lambda p: p.name.lower())
+    return sorted(achados, key=lambda p: (p.name.lower(), str(p)))
 
 
 def guardar_processado(caminho: Path):
@@ -347,13 +400,58 @@ def guardar_processado(caminho: Path):
     caminho.replace(destino)
 
 
+def remover_pastas_vazias(pastas):
+    """Apaga subpastas de novos/ que ficaram vazias (rmdir só funciona se vazia)."""
+    for pasta in sorted(set(pastas), key=lambda x: len(x.parts), reverse=True):
+        if pasta != PASTA_NOVOS and PASTA_NOVOS in pasta.parents:
+            try:
+                pasta.rmdir()
+            except OSError:
+                pass
+
+
+def avisar_produtos_ausentes(df: pd.DataFrame):
+    """Avisos que ajudam a notar um arquivo esquecido em novos/.
+
+    1) Algum produto tinha dados no mês anterior mas não no último mês
+       (ex.: só 1 dos 2 arquivos do mês foi colocado na pasta).
+    2) Meses sem nenhum dado nos últimos 12 meses (buracos recentes).
+       Buracos antigos e permanentes (ex.: 2014-06) não são avisados.
+    """
+    meses = sorted(df["mes"].unique())
+    ultimo = meses[-1]
+
+    presentes = set(meses)
+    janela = pd.period_range(end=pd.Period(ultimo, freq="M"), periods=12, freq="M")
+    buracos = [str(p) for p in janela if str(p) not in presentes and str(p) > meses[0]]
+    if buracos:
+        print(
+            f"\n  AVISO: sem dados nos meses {', '.join(buracos)} "
+            "(se existirem arquivos da ANP para esses meses, coloque-os em novos/ também)."
+        )
+
+    anteriores = [m for m in meses if m < ultimo]
+    if not anteriores:
+        return
+    anterior = anteriores[-1]  # último mês anterior que tenha dados
+    faltando = sorted(
+        set(df.loc[df["mes"] == anterior, "produto"])
+        - set(df.loc[df["mes"] == ultimo, "produto"])
+    )
+    if faltando:
+        print(
+            f"\n  ATENCAO: {', '.join(faltando)} tinha(m) dados em {anterior}, mas não em "
+            f"{ultimo}. Faltou colocar algum arquivo do mês na pasta novos? "
+            "(Cada mês vem em 3 arquivos: gasolina+etanol, diesel+GNV e GLP.)"
+        )
+
+
 def main() -> int:
     analisador = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     analisador.add_argument(
         "arquivos",
         nargs="*",
-        help="(opcional) Arquivo(s) da ANP, ex.: ca-2026-02.zip. "
-        "Sem isso, o script usa os arquivos da pasta novos/.",
+        help="(opcional) Arquivo(s) da ANP. Sem isso, o script usa os arquivos da pasta novos/.",
     )
     analisador.add_argument(
         "--so-json",
@@ -378,35 +476,66 @@ def main() -> int:
             if not lista:
                 print(f"Nenhum arquivo novo encontrado em: {PASTA_NOVOS}")
                 print(
-                    "Baixe o arquivo do semestre atual no site da ANP, coloque nessa "
-                    "pasta (pode ser o .zip, sem extrair) e rode de novo."
+                    "Baixe os arquivos do mês no site da ANP (3 arquivos: gasolina+etanol, "
+                    "diesel+GNV e GLP; ou os arquivos do semestre), coloque nessa pasta e rode de novo."
                 )
                 print("Nada foi alterado.")
                 return 1
+            print(f"Arquivos encontrados em novos/: {len(lista)}")
 
+        usados, falhas = [], []
         for caminho in lista:
-            if not caminho.exists():
-                raise FileNotFoundError(f"Arquivo não encontrado: {caminho}")
-            permitidos = meses_do_semestre(caminho)
-            if permitidos is None:
-                print(
-                    "  Aviso: não consegui deduzir o semestre pelo nome do arquivo "
-                    "(esperado ca-AAAA-01 ou ca-AAAA-02); usando todos os meses dele."
-                )
-            novo = agregar_arquivo(caminho)
-            consolidado = mesclar(consolidado, novo, permitidos)
+            try:
+                if not caminho.exists():
+                    raise FileNotFoundError(f"Arquivo não encontrado: {caminho}")
+                permitidos, descricao = meses_do_nome(caminho)
+                if permitidos is None:
+                    print(
+                        f"\n{caminho.name}: não reconheci o mês/semestre pelo nome "
+                        "(esperado ca-AAAA-01/02, glp-AAAA-01/02 ou ...precos-AAAA-MM...); "
+                        "vou usar todos os meses que estiverem dentro dele."
+                    )
+                else:
+                    print(f"\n{caminho.name}: reconhecido como {descricao}")
+                novo = agregar_arquivo(caminho)
+                consolidado = mesclar(consolidado, novo, permitidos)
+                usados.append(caminho)
+            except (ValueError, FileNotFoundError, zipfile.BadZipFile) as erro:
+                # Um arquivo com problema não derruba os outros (útil ao carregar o
+                # histórico inteiro de uma vez). O consolidado só muda com arquivos válidos.
+                print(f"  ERRO neste arquivo (ele será ignorado): {erro}")
+                falhas.append((caminho, erro))
 
-        # Só grava depois que TODOS os arquivos foram lidos sem erro.
+        if not usados:
+            print("\nNenhum arquivo pôde ser usado. Nada foi alterado.")
+            return 1
+
+        avisar_produtos_ausentes(consolidado)
+
         salvar_consolidado(consolidado)
         gerar_json(consolidado)
         if mover:
-            for caminho in lista:
+            pastas = [c.parent for c in usados]
+            for caminho in usados:
                 guardar_processado(caminho)
-            print(f"Arquivos usados foram movidos para: {PASTA_PROCESSADOS}")
+            remover_pastas_vazias(pastas)
+            print(f"{len(usados)} arquivo(s) usado(s) foram movidos para: {PASTA_PROCESSADOS}")
 
-        print("\nPRONTO! Agora envie estes 2 arquivos para o GitHub:")
+        titulo = "PRONTO!" if not falhas else "GRAVADO PARCIALMENTE (veja os erros abaixo)."
+        print(f"\n{titulo} Agora envie estes 2 arquivos para o GitHub:")
         print(f"  1) {JSON_SAIDA}   (no GitHub: pasta docs > data)")
         print(f"  2) {CSV_CONSOLIDADO}   (no GitHub: pasta fonte)")
+
+        if falhas:
+            onde = " e continuam na pasta novos" if mover else ""
+            print(f"\nATENCAO: {len(falhas)} arquivo(s) NÃO foram usados{onde}:")
+            for caminho, erro in falhas:
+                print(f"  - {caminho.name}: {erro}")
+            print(
+                "Corrija ou remova esses arquivos e rode de novo. "
+                "O que já foi gravado não será duplicado."
+            )
+            return 1
     except (ValueError, FileNotFoundError, zipfile.BadZipFile) as erro:
         print(f"ERRO: {erro}")
         print("Nada foi alterado.")

@@ -14,10 +14,33 @@ const COMB_CORES = {
   "DIESEL S10": "#E69F00",
   "DIESEL S50": "#CC79A7",
   "GNV": "#8a8f98",
+  "GLP": "#8B5CF6",
 };
 const COMB_COR_PADRAO = "#8a8f98";
 
 const COMB_PADRAO = ["GASOLINA", "ETANOL", "DIESEL S10"];
+
+// O GLP (botijão de 13 kg) custa ~R$ 100, contra R$ 3 a R$ 8 por litro dos demais, e
+// numa mesma escala os combustíveis ficariam achatados. Por isso ele nunca aparece junto
+// com os outros: clicar no GLP limpa os combustíveis; clicar num combustível tira o GLP.
+// Entre os combustíveis, dá para marcar quantos quiser.
+const COMB_EXCLUSIVO = "GLP";
+
+// <selecao>
+// Devolve a nova seleção depois de um clique no produto `id` (função pura).
+function combProximaSelecao(atual, id) {
+  const sel = new Set(atual);
+  if (id === COMB_EXCLUSIVO) return new Set([id]); // GLP sozinho (se já era, não muda)
+  if (sel.has(COMB_EXCLUSIVO)) return new Set([id]); // sai do GLP, mostra só o clicado
+  if (sel.has(id)) {
+    if (sel.size === 1) return sel; // mantém pelo menos um
+    sel.delete(id);
+  } else {
+    sel.add(id);
+  }
+  return sel;
+}
+// </selecao>
 
 const NOMES_UF = {
   AC: "Acre", AL: "Alagoas", AM: "Amazonas", AP: "Amapá", BA: "Bahia",
@@ -159,27 +182,37 @@ function combMontarControles() {
   const area = document.getElementById("comb-produtos");
   area.innerHTML = "";
   json.produtos.forEach((p) => {
+    if (p.id === COMB_EXCLUSIVO) {
+      const sep = document.createElement("span"); // linha fina separando o GLP dos combustíveis
+      sep.className = "chip-sep";
+      sep.setAttribute("aria-hidden", "true");
+      area.append(sep);
+    }
     const botao = document.createElement("button");
     botao.type = "button";
     botao.className = "chip";
     botao.dataset.id = p.id;
+    if (p.id === COMB_EXCLUSIVO) {
+      botao.title = "O GLP aparece sozinho no gráfico (a escala de preço é diferente).";
+    }
     botao.setAttribute("aria-pressed", String(comb.selecionados.has(p.id)));
     const bolinha = document.createElement("span");
     bolinha.className = "bolinha";
     bolinha.style.background = COMB_CORES[p.id] || COMB_COR_PADRAO;
     botao.append(bolinha, document.createTextNode(p.nome));
     botao.addEventListener("click", () => {
-      if (comb.selecionados.has(p.id)) {
-        if (comb.selecionados.size === 1) return; // mantém pelo menos um
-        comb.selecionados.delete(p.id);
-      } else {
-        comb.selecionados.add(p.id);
-      }
-      botao.setAttribute("aria-pressed", String(comb.selecionados.has(p.id)));
+      comb.selecionados = combProximaSelecao(comb.selecionados, p.id);
+      combAtualizarChips();
       combAtualizar();
     });
     area.append(botao);
   });
+}
+
+function combAtualizarChips() {
+  document
+    .querySelectorAll("#comb-produtos .chip")
+    .forEach((b) => b.setAttribute("aria-pressed", String(comb.selecionados.has(b.dataset.id))));
 }
 
 function combMarcarAtalho(ativo) {
@@ -309,7 +342,7 @@ async function combIniciar() {
     comb.json = json;
 
     document.getElementById("fonte-comb").textContent =
-      `Fonte: ANP - Levantamento de Preços de Combustíveis. Dados até ${combFmtMesAno(json.ultimo_mes)}.`;
+      `Fonte: ANP - Levantamento de Preços de Combustíveis e de GLP. Dados até ${combFmtMesAno(json.ultimo_mes)}.`;
 
     combPreencherKpi();
     combMontarControles();
