@@ -28,9 +28,15 @@ RAIZ = Path(__file__).resolve().parent.parent
 PASTA_DADOS = RAIZ / "docs" / "data"
 
 URL_BASE = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.{codigo}/dados"
-TENTATIVAS = 3
-ESPERA_SEGUNDOS = 3
-TIMEOUT = 30
+TENTATIVAS = 5
+ESPERA_SEGUNDOS = 5  # espera crescente entre tentativas: 5s, 10s, 15s, 20s
+TIMEOUT = 20
+CABECALHOS = {
+    "Accept": "application/json",
+    "User-Agent": "macro-brasil-projeto-pessoal/1.0",
+}
+# Erros 4xx (exceto 408 e 429) não adiantam repetir: o pedido em si está errado.
+HTTP_REPETIVEIS = {408, 429}
 
 # Para adicionar um novo indicador, basta incluir um item aqui.
 # "somente_mudancas": para séries diárias que mudam raramente (ex.: Selic),
@@ -85,9 +91,20 @@ def buscar_periodo(codigo: int, data_inicial: str, data_final: str):
     }
     ultimo_erro = None
     for tentativa in range(1, TENTATIVAS + 1):
+        definitivo = False
         try:
-            resposta = requests.get(url, params=params, timeout=TIMEOUT)
-            resposta.raise_for_status()
+            resposta = requests.get(
+                url, params=params, headers=CABECALHOS, timeout=TIMEOUT
+            )
+            if resposta.status_code != 200:
+                # Mostra o código HTTP e o início da resposta: é o que permite
+                # descobrir a causa quando a coleta falha no GitHub Actions.
+                trecho = " ".join(resposta.text.split())[:200]
+                definitivo = (
+                    400 <= resposta.status_code < 500
+                    and resposta.status_code not in HTTP_REPETIVEIS
+                )
+                raise RuntimeError(f"HTTP {resposta.status_code}: {trecho!r}")
             dados = resposta.json()
             if not isinstance(dados, list):
                 raise ValueError(f"Resposta inesperada: {str(dados)[:100]}")
@@ -95,11 +112,12 @@ def buscar_periodo(codigo: int, data_inicial: str, data_final: str):
         except Exception as erro:  # noqa: BLE001
             ultimo_erro = erro
             print(f"  tentativa {tentativa}/{TENTATIVAS} falhou: {erro}")
+            if definitivo:
+                break
             if tentativa < TENTATIVAS:
                 time.sleep(ESPERA_SEGUNDOS * tentativa)
     raise RuntimeError(
-        f"Falhou após {TENTATIVAS} tentativas "
-        f"({data_inicial} a {data_final}): {ultimo_erro}"
+        f"Falhou ({data_inicial} a {data_final}): {ultimo_erro}"
     )
 
 
@@ -137,6 +155,22 @@ def salvar_json(caminho: Path, conteudo: dict):
     with open(temporario, "w", encoding="utf-8") as f:
         json.dump(conteudo, f, ensure_ascii=False, separators=(",", ":"))
     temporario.replace(caminho)
+
+
+def salvar_status():
+    """Registra quando a coleta rodou com sucesso (todas as séries consultadas).
+
+    O site mostra essa data no rodapé como "última verificação". Ela muda a cada
+    execução bem-sucedida, mesmo quando os dados em si não mudaram. Se a coleta
+    falhar, o arquivo não é atualizado e a data fica velha, o que denuncia o problema.
+    """
+    salvar_json(
+        PASTA_DADOS / "status.json",
+        {
+            "verificado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "ok": True,
+        },
+    )
 
 
 def atualizar_serie(chave: str, cfg: dict) -> bool:
@@ -203,7 +237,10 @@ def main() -> int:
 
     # Código de saída diferente de zero faz o GitHub Actions marcar a execução
     # como falha e te avisar por e-mail (útil na Etapa 3).
-    return 0 if all(resultados.values()) else 1
+    if all(resultados.values()):
+        salvar_status()
+        return 0
+    return 1
 
 
 if __name__ == "__main__":

@@ -232,7 +232,22 @@ async function iniciar() {
   if (datas.length) {
     const quando = new Date(datas[datas.length - 1]).toLocaleString("pt-BR");
     document.getElementById("atualizado").textContent =
-      `Última atualização dos dados: ${quando}.`;
+      `Última mudança nos dados: ${quando}.`;
+  }
+
+  // Data da última coleta automática bem-sucedida (arquivo opcional).
+  try {
+    const resp = await fetch("data/status.json", { cache: "no-cache" });
+    if (resp.ok) {
+      const status = await resp.json();
+      if (status.verificado_em) {
+        const quando = new Date(status.verificado_em).toLocaleString("pt-BR");
+        document.getElementById("verificado").textContent =
+          `Última verificação automática: ${quando}.`;
+      }
+    }
+  } catch (erro) {
+    console.warn("status.json indisponível", erro);
   }
 
   window
