@@ -45,6 +45,9 @@ const INDICADORES = [
   },
   {
     id: "divida_bruta", arquivo: "data/divida_bruta.json", corVar: "--ciano",
+    // Gráfico combinado: colunas com o saldo em R$ (eixo esquerdo, em trilhões)
+    // e linha com o % do PIB (eixo direito).
+    arquivoValor: "data/divida_bruta_valor.json", corVar2: "--laranja",
     escalonado: false, granularidade: "mes",
     prefixo: "", sufixo: "%", casas: 1, casasEixo: 0, delta: "pp",
     rotuloBalao: " do PIB",
@@ -100,7 +103,7 @@ function textoDelta(ind, json) {
   return ` (${sinal}${fmtNumero(Math.abs(dif), 2)}${unidade})`;
 }
 
-function preencherKpi(ind, json) {
+function preencherKpi(ind, json, extra) {
   const card = document.getElementById(`kpi-${ind.id}`);
   const ultimo = json.dados[json.dados.length - 1];
   card.querySelector(".valor").textContent =
@@ -113,8 +116,10 @@ function preencherKpi(ind, json) {
     detalhe.textContent =
       (ind.textoDetalhe || "Em ") + fmtDia(ultimo.data) + textoDelta(ind, json);
   } else {
-    detalhe.textContent =
-      "Referente a " + fmtMes(ultimo.data) + textoDelta(ind, json);
+    let texto = "Referente a " + fmtMes(ultimo.data) + textoDelta(ind, json);
+    const par = extra && extra.dados.find((d) => d.data === ultimo.data);
+    if (par) texto += ` · R$ ${fmtNumero(par.valor / 1e6, 2)} tri`;
+    detalhe.textContent = texto;
   }
 }
 
@@ -135,7 +140,7 @@ function limiteInferior(json) {
   return ultimo.getTime();
 }
 
-function criarGrafico(ind, json) {
+function criarGrafico(ind, json, extra) {
   const cor = css(ind.corVar);
   const ctx = document.getElementById(`grafico-${ind.id}`);
 
@@ -147,23 +152,62 @@ function criarGrafico(ind, json) {
     if (ultimo.x < hoje) pontos.push({ x: hoje, y: ultimo.y });
   }
 
-  estado.graficos[ind.id] = new Chart(ctx, {
-    type: "line",
-    data: {
-      datasets: [
-        {
-          label: json.nome,
-          data: pontos,
-          borderColor: cor,
-          backgroundColor: cor,
-          borderWidth: 2,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          stepped: ind.escalonado ? "before" : false,
-          tension: 0,
-        },
-      ],
+  const fmtValor = (v) => `${ind.prefixo}${fmtNumero(v, ind.casas)}${ind.sufixo}${ind.rotuloBalao}`;
+  let datasets = [
+    {
+      label: json.nome,
+      data: pontos,
+      borderColor: cor,
+      backgroundColor: cor,
+      borderWidth: 2,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      stepped: ind.escalonado ? "before" : false,
+      tension: 0,
+      rotulo: fmtValor,
     },
+  ];
+  const escalas = {};
+  if (extra) {
+    // Colunas (R$ trilhões, eixo esquerdo) + linha (% do PIB, eixo direito).
+    const cor2 = css(ind.corVar2);
+    datasets = [
+      {
+        type: "bar",
+        label: "Saldo da dívida (R$ trilhões)",
+        data: extra.dados.map((d) => ({ x: d.data, y: d.valor / 1e6 })),
+        backgroundColor: cor + "cc",
+        borderColor: cor,
+        borderWidth: 0,
+        yAxisID: "y",
+        order: 2,
+        rotulo: (v) => `Saldo: R$ ${fmtNumero(v, 2)} tri`,
+      },
+      {
+        type: "line",
+        label: "% do PIB",
+        data: pontos,
+        borderColor: cor2,
+        backgroundColor: cor2,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        tension: 0,
+        yAxisID: "y1",
+        order: 1,
+        rotulo: (v) => `${fmtNumero(v, ind.casas)}% do PIB`,
+      },
+    ];
+    escalas.y1 = {
+      position: "right",
+      grid: { drawOnChartArea: false },
+      ticks: { color: css("--suave"), callback: (v) => fmtNumero(v, 0) + "%" },
+    };
+  }
+
+  estado.graficos[ind.id] = new Chart(ctx, {
+    type: extra ? "bar" : "line",
+    data: { datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -190,23 +234,27 @@ function criarGrafico(ind, json) {
           },
         },
         y: {
+          position: "left",
           grid: { color: css("--grade") },
           ticks: {
             color: css("--suave"),
-            callback: (v) => ind.prefixo + fmtNumero(v, ind.casasEixo) + ind.sufixo,
+            callback: extra
+              ? (v) => "R$ " + fmtNumero(v, 0) + " tri"
+              : (v) => ind.prefixo + fmtNumero(v, ind.casasEixo) + ind.sufixo,
           },
+          ...(extra ? { beginAtZero: true } : {}),
         },
+        ...escalas,
       },
       plugins: {
-        legend: { display: false },
+        legend: { display: !!extra, labels: { color: css("--suave"), boxWidth: 12 } },
         tooltip: {
           callbacks: {
             title: (itens) => {
               const iso = new Date(itens[0].parsed.x).toISOString().slice(0, 10);
               return ind.granularidade === "dia" ? fmtDia(iso) : fmtMes(iso);
             },
-            label: (item) =>
-              ` ${ind.prefixo}${fmtNumero(item.parsed.y, ind.casas)}${ind.sufixo}${ind.rotuloBalao}`,
+            label: (item) => " " + item.dataset.rotulo(item.parsed.y),
           },
         },
       },
@@ -229,9 +277,19 @@ function aplicarTema() {
     const grafico = estado.graficos[ind.id];
     if (!grafico) continue;
     const cor = css(ind.corVar);
-    const ds = grafico.data.datasets[0];
-    ds.borderColor = cor;
-    ds.backgroundColor = cor;
+    const dss = grafico.data.datasets;
+    if (dss.length > 1) {
+      const cor2 = css(ind.corVar2);
+      dss[0].backgroundColor = cor + "cc";
+      dss[0].borderColor = cor;
+      dss[1].borderColor = cor2;
+      dss[1].backgroundColor = cor2;
+      grafico.options.scales.y1.ticks.color = css("--suave");
+      grafico.options.plugins.legend.labels.color = css("--suave");
+    } else {
+      dss[0].borderColor = cor;
+      dss[0].backgroundColor = cor;
+    }
     grafico.options.scales.x.grid.color = css("--grade");
     grafico.options.scales.y.grid.color = css("--grade");
     grafico.options.scales.x.ticks.color = css("--suave");
@@ -247,9 +305,24 @@ async function carregar(ind) {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const json = await resp.json();
     if (!json.dados || json.dados.length === 0) throw new Error("arquivo vazio");
+    // Dados extras (opcionais): se falharem, o gráfico sai só com a linha.
+    let extra = null;
+    if (ind.arquivoValor) {
+      try {
+        const r2 = await fetch(ind.arquivoValor, { cache: "no-cache" });
+        if (r2.ok) {
+          const j2 = await r2.json();
+          if (j2.dados && j2.dados.length) extra = j2;
+        }
+      } catch (e) {
+        console.warn(ind.id, "série extra indisponível", e);
+      }
+    }
     estado.dados[ind.id] = json;
-    preencherKpi(ind, json);
-    criarGrafico(ind, json);
+    estado.dadosExtra = estado.dadosExtra || {};
+    if (extra) estado.dadosExtra[ind.id] = extra;
+    preencherKpi(ind, json, extra);
+    criarGrafico(ind, json, extra);
     return json;
   } catch (erro) {
     console.error(ind.id, erro);
