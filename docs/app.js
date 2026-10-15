@@ -2,25 +2,52 @@
 // Lê os JSONs gerados por scripts/atualizar_dados.py (em docs/data/)
 // e desenha os gráficos com Chart.js.
 //
-// Para adicionar um novo indicador (Etapa 5): inclua um item em INDICADORES,
-// um <canvas> e um card de KPI no index.html.
+// Para adicionar um novo indicador: inclua um item em INDICADORES,
+// um <canvas id="grafico-ID"> e um card <article id="kpi-ID"> no index.html.
 
+// Campos de cada indicador:
+//  granularidade: "mes" ou "dia" (formato da data no KPI e no balão)
+//  prefixo/sufixo: "R$ " / "%" ao redor do número
+//  casas: casas decimais no KPI e no balão; casasEixo: no eixo vertical
+//  delta: "pct" (variação em %) ou "pp" (diferença em pontos) ou null
+//  rotuloBalao: texto depois do número no balão
 const INDICADORES = [
   {
-    id: "ipca",
-    arquivo: "data/ipca.json",
-    corVar: "--azul",
-    escalonado: false, // linha normal (série mensal)
-    sufixo: "%",
-    casas: 2,
+    id: "ipca", arquivo: "data/ipca.json", corVar: "--azul",
+    escalonado: false, granularidade: "mes",
+    prefixo: "", sufixo: "%", casas: 2, casasEixo: 0, delta: null,
+    rotuloBalao: " ao ano",
   },
   {
-    id: "selic",
-    arquivo: "data/selic.json",
-    corVar: "--laranja",
+    id: "selic", arquivo: "data/selic.json", corVar: "--laranja",
     escalonado: true, // degraus: o valor vale até a próxima mudança
-    sufixo: "%",
-    casas: 2,
+    granularidade: "dia",
+    prefixo: "", sufixo: "%", casas: 2, casasEixo: 0, delta: null,
+    rotuloBalao: " ao ano",
+  },
+  {
+    id: "dolar", arquivo: "data/dolar.json", corVar: "--verde",
+    escalonado: false, granularidade: "dia",
+    prefixo: "R$ ", sufixo: "", casas: 2, casasEixo: 1, delta: "pct",
+    rotuloBalao: "", textoDetalhe: "Venda em ",
+  },
+  {
+    id: "desemprego", arquivo: "data/desemprego.json", corVar: "--vermelho",
+    escalonado: false, granularidade: "mes",
+    prefixo: "", sufixo: "%", casas: 1, casasEixo: 0, delta: "pp",
+    rotuloBalao: " da força de trabalho",
+  },
+  {
+    id: "ibcbr", arquivo: "data/ibcbr.json", corVar: "--roxo",
+    escalonado: false, granularidade: "mes",
+    prefixo: "", sufixo: "", casas: 1, casasEixo: 0, delta: "pct",
+    rotuloBalao: " pontos",
+  },
+  {
+    id: "divida_bruta", arquivo: "data/divida_bruta.json", corVar: "--ciano",
+    escalonado: false, granularidade: "mes",
+    prefixo: "", sufixo: "%", casas: 1, casasEixo: 0, delta: "pp",
+    rotuloBalao: " do PIB",
   },
 ];
 
@@ -55,17 +82,39 @@ function ultimaMudanca(dados) {
   return dados[0];
 }
 
+function textoDelta(ind, json) {
+  const d = json.dados;
+  if (!ind.delta || d.length < 2) return "";
+  const atual = d[d.length - 1].valor;
+  const antes = d[d.length - 2].valor;
+  let dif;
+  let unidade;
+  if (ind.delta === "pct") {
+    dif = ((atual - antes) / antes) * 100;
+    unidade = "%";
+  } else {
+    dif = atual - antes;
+    unidade = " p.p.";
+  }
+  const sinal = dif > 0 ? "+" : dif < 0 ? "−" : "";
+  return ` (${sinal}${fmtNumero(Math.abs(dif), 2)}${unidade})`;
+}
+
 function preencherKpi(ind, json) {
   const card = document.getElementById(`kpi-${ind.id}`);
   const ultimo = json.dados[json.dados.length - 1];
   card.querySelector(".valor").textContent =
-    fmtNumero(ultimo.valor, ind.casas) + ind.sufixo;
+    ind.prefixo + fmtNumero(ultimo.valor, ind.casas) + ind.sufixo;
 
   const detalhe = card.querySelector(".detalhe");
   if (ind.id === "selic") {
     detalhe.textContent = "Última mudança em " + fmtDia(ultimaMudanca(json.dados).data);
+  } else if (ind.granularidade === "dia") {
+    detalhe.textContent =
+      (ind.textoDetalhe || "Em ") + fmtDia(ultimo.data) + textoDelta(ind, json);
   } else {
-    detalhe.textContent = "Referente a " + fmtMes(ultimo.data);
+    detalhe.textContent =
+      "Referente a " + fmtMes(ultimo.data) + textoDelta(ind, json);
   }
 }
 
@@ -144,7 +193,7 @@ function criarGrafico(ind, json) {
           grid: { color: css("--grade") },
           ticks: {
             color: css("--suave"),
-            callback: (v) => fmtNumero(v, 0) + ind.sufixo,
+            callback: (v) => ind.prefixo + fmtNumero(v, ind.casasEixo) + ind.sufixo,
           },
         },
       },
@@ -154,10 +203,10 @@ function criarGrafico(ind, json) {
           callbacks: {
             title: (itens) => {
               const iso = new Date(itens[0].parsed.x).toISOString().slice(0, 10);
-              return ind.escalonado ? fmtDia(iso) : fmtMes(iso);
+              return ind.granularidade === "dia" ? fmtDia(iso) : fmtMes(iso);
             },
             label: (item) =>
-              ` ${fmtNumero(item.parsed.y, ind.casas)}${ind.sufixo} ao ano`,
+              ` ${ind.prefixo}${fmtNumero(item.parsed.y, ind.casas)}${ind.sufixo}${ind.rotuloBalao}`,
           },
         },
       },
@@ -220,9 +269,65 @@ function configurarBotoes() {
   });
 }
 
+// ---------- Boletim Focus (tabela) ----------
+function fmtSeta(atual, anterior) {
+  if (anterior === null || anterior === undefined) return "";
+  const dif = atual - anterior;
+  if (Math.abs(dif) < 0.005) return '<span class="tend igual" title="Igual a 4 semanas antes">=</span>';
+  const sobe = dif > 0;
+  const txt = `${sobe ? "+" : "−"}${fmtNumero(Math.abs(dif), 2)}`;
+  return `<span class="tend ${sobe ? "sobe" : "desce"}" title="Há 4 semanas: ${fmtNumero(anterior, 2)}">${sobe ? "▲" : "▼"} ${txt}</span>`;
+}
+
+async function carregarFocus() {
+  const erro = document.getElementById("erro-focus");
+  try {
+    const resp = await fetch("data/focus.json", { cache: "no-cache" });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const json = await resp.json();
+    if (!json.indicadores || !json.indicadores.length) throw new Error("arquivo vazio");
+
+    const cabecalho = document.querySelector("#tabela-focus thead");
+    cabecalho.innerHTML =
+      "<tr><th>Indicador</th>" +
+      json.anos.map((a) => `<th>Em ${a}</th>`).join("") +
+      "</tr>";
+
+    const corpo = document.querySelector("#tabela-focus tbody");
+    corpo.innerHTML = "";
+    for (const ind of json.indicadores) {
+      const tr = document.createElement("tr");
+      const prefixo = ind.unidade === "R$" ? "R$ " : "";
+      const sufixo = ind.unidade === "%" ? "%" : "";
+      let html = `<td>${ind.nome}</td>`;
+      for (const ano of json.anos) {
+        const v = ind.valores[String(ano)];
+        html += v
+          ? `<td>${prefixo}${fmtNumero(v.mediana, ind.casas)}${sufixo}${fmtSeta(v.mediana, v.anterior)}</td>`
+          : "<td>—</td>";
+      }
+      tr.innerHTML = html;
+      corpo.appendChild(tr);
+    }
+    if (json.data_pesquisa) {
+      document.getElementById("fonte-focus").textContent =
+        `Fonte: Banco Central - Expectativas de Mercado (mediana). Pesquisa de ${fmtDia(json.data_pesquisa)}.`;
+    }
+    return json;
+  } catch (e) {
+    console.error("focus", e);
+    erro.textContent = `Não foi possível carregar o Focus (${e.message}).`;
+    erro.hidden = false;
+    return null;
+  }
+}
+
 async function iniciar() {
   configurarBotoes();
-  const resultados = await Promise.all(INDICADORES.map(carregar));
+  const [resultados] = await Promise.all([
+    Promise.all(INDICADORES.map(carregar)),
+    carregarFocus(),
+  ]);
 
   const datas = resultados
     .filter(Boolean)

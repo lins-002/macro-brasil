@@ -32,8 +32,8 @@
       </article>
     </section>
 
-    <div class="controles" role="group" aria-label="Período dos gráficos de IPCA e Selic">
-      <span>Período (IPCA e Selic):</span>
+    <div class="controles" role="group" aria-label="Período dos gráficos">
+      <span>Período dos gráficos:</span>
       <button type="button" data-anos="5">5 anos</button>
       <button type="button" data-anos="10">10 anos</button>
       <button type="button" data-anos="20" class="ativo">20 anos</button>
@@ -53,6 +53,76 @@
       <div class="grafico"><canvas id="grafico-selic" role="img" aria-label="Gráfico da meta Selic"></canvas></div>
       <p class="erro" id="erro-selic" hidden></p>
     </section>
+
+    <h2 class="titulo-secao">Mercado e atividade</h2>
+
+    <section class="kpis" aria-label="Mercado e atividade">
+      <article class="kpi" id="kpi-dolar">
+        <h2>Dólar (venda)</h2>
+        <p class="valor">…</p>
+        <p class="detalhe">Carregando</p>
+      </article>
+      <article class="kpi" id="kpi-desemprego">
+        <h2>Taxa de desemprego</h2>
+        <p class="valor">…</p>
+        <p class="detalhe">Carregando</p>
+      </article>
+      <article class="kpi" id="kpi-ibcbr">
+        <h2>IBC-Br (atividade)</h2>
+        <p class="valor">…</p>
+        <p class="detalhe">Carregando</p>
+      </article>
+      <article class="kpi" id="kpi-divida_bruta">
+        <h2>Dívida bruta (% do PIB)</h2>
+        <p class="valor">…</p>
+        <p class="detalhe">Carregando</p>
+      </article>
+    </section>
+
+    <div class="grade-graficos">
+      <section class="cartao">
+        <h2>Dólar comercial (venda)</h2>
+        <p class="fonte">Cotação diária em R$. Fonte: Banco Central (SGS 1)</p>
+        <div class="grafico"><canvas id="grafico-dolar" role="img" aria-label="Gráfico da cotação do dólar"></canvas></div>
+        <p class="erro" id="erro-dolar" hidden></p>
+      </section>
+
+      <section class="cartao">
+        <h2>Taxa de desemprego</h2>
+        <p class="fonte">PNAD Contínua, em %. Fonte: IBGE / Banco Central (SGS 24369)</p>
+        <div class="grafico"><canvas id="grafico-desemprego" role="img" aria-label="Gráfico da taxa de desemprego"></canvas></div>
+        <p class="erro" id="erro-desemprego" hidden></p>
+      </section>
+
+      <section class="cartao">
+        <h2>IBC-Br</h2>
+        <p class="fonte">Prévia mensal do PIB, com ajuste sazonal (2002 = 100). Fonte: Banco Central (SGS 24364)</p>
+        <div class="grafico"><canvas id="grafico-ibcbr" role="img" aria-label="Gráfico do IBC-Br"></canvas></div>
+        <p class="erro" id="erro-ibcbr" hidden></p>
+      </section>
+
+      <section class="cartao">
+        <h2>Dívida bruta do governo geral</h2>
+        <p class="fonte">Em % do PIB. Fonte: Banco Central (SGS 13762)</p>
+        <div class="grafico"><canvas id="grafico-divida_bruta" role="img" aria-label="Gráfico da dívida bruta"></canvas></div>
+        <p class="erro" id="erro-divida_bruta" hidden></p>
+      </section>
+    </div>
+
+    <section class="cartao" id="cartao-focus">
+      <h2>O que o mercado espera (Boletim Focus)</h2>
+      <p class="fonte" id="fonte-focus">Fonte: Banco Central - Expectativas de Mercado (mediana)</p>
+      <div class="tabela-rolavel">
+        <table class="tabela" id="tabela-focus">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="nota">A seta compara com a mediana de cerca de 4 semanas antes.</p>
+      <p class="erro" id="erro-focus" hidden></p>
+    </section>
+
+    <h2 class="titulo-secao">Combustíveis</h2>
 
     <section class="cartao" id="cartao-comb">
       <h2>Preço dos combustíveis</h2>

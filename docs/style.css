@@ -7,6 +7,12 @@
   --grade: #e8ebef;
   --azul: #1f6feb;
   --laranja: #d9730d;
+  --verde: #1a8f55;
+  --roxo: #7c4dff;
+  --vermelho: #d6336c;
+  --ciano: #0f8fa8;
+  --sobe: #c0392b;
+  --desce: #1a8f55;
   --botao-ativo: #1f6feb;
   --botao-ativo-texto: #ffffff;
 }
@@ -21,6 +27,12 @@
     --grade: #262d36;
     --azul: #5aa2ff;
     --laranja: #f0974a;
+    --verde: #4cc38a;
+    --roxo: #a78bfa;
+    --vermelho: #f06595;
+    --ciano: #4fc3d9;
+    --sobe: #ff7b72;
+    --desce: #4cc38a;
     --botao-ativo: #5aa2ff;
     --botao-ativo-texto: #0f1318;
   }
@@ -185,4 +197,31 @@ body {
 @media (max-width: 480px) {
   .grafico.alto { height: 340px; }
   .campo select, .campo input[type="month"] { min-width: 130px; }
+}
+
+/* ---------- Seções, grade de gráficos e tabela do Focus ---------- */
+.titulo-secao { margin: 28px 0 12px; font-size: 1.25rem; }
+
+.grade-graficos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 16px;
+}
+.grade-graficos .cartao { margin-bottom: 0; min-width: 0; }
+.grade-graficos .grafico { height: 260px; }
+.grade-graficos + .cartao { margin-top: 16px; }
+
+.tabela-rolavel { overflow-x: auto; }
+.tabela { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.tabela th, .tabela td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--borda); }
+.tabela th:first-child, .tabela td:first-child { text-align: left; }
+.tabela thead th { color: var(--suave); font-size: 0.8rem; font-weight: 600; }
+.tabela td { font-size: 0.95rem; }
+.tabela .tend { margin-left: 6px; font-size: 0.8rem; }
+.tabela .tend.sobe { color: var(--sobe); }
+.tabela .tend.desce { color: var(--desce); }
+.tabela .tend.igual { color: var(--suave); }
+
+@media (max-width: 520px) {
+  .grade-graficos { grid-template-columns: 1fr; }
 }
