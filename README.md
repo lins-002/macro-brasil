@@ -28,6 +28,7 @@ python scripts/atualizar_dados.py
 | `docs/data/desemprego.json` | Taxa de desocupação (PNAD Contínua) | 24369 |
 | `docs/data/ibcbr.json` | IBC-Br com ajuste sazonal (prévia do PIB) | 24364 |
 | `docs/data/divida_bruta.json` | Dívida bruta do governo geral (% do PIB) | 13762 |
+| `docs/data/divida_bruta_valor.json` | Dívida bruta do governo geral (saldo em R$ milhões; colunas do gráfico) | 13761 |
 | `docs/data/focus.json` | Expectativas do mercado (Boletim Focus, mediana): IPCA, Selic, dólar e PIB do ano atual e do próximo | API Olinda |
 | `docs/data/combustiveis.json` | Preço médio mensal dos combustíveis e GLP (ANP) | - |
 
