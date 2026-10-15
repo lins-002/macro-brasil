@@ -16,6 +16,7 @@ import sys
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 
@@ -289,22 +290,69 @@ def _num(valor):
         return None
 
 
+# O serviço do Banco Central (Olinda) é exigente com o formato do endereço:
+# recusou (HTTP 400) a consulta feita com espaços codificados como "+", que é
+# o padrão da biblioteca requests. Por isso o endereço é montado à mão, com %20,
+# e o script tenta algumas variações até uma funcionar (a que funcionou é
+# lembrada para as próximas consultas).
+# (descrição, usar $format=json, caracteres que NÃO são codificados, filtro entre parênteses)
+FOCUS_VARIANTES = [
+    ("espaço como %20", True, "'(),", False),
+    ("sem $format (só cabeçalho Accept)", False, "'(),", False),
+    ("aspas codificadas (%27)", True, "(),", False),
+    ("filtro entre parênteses", True, "'(),", True),
+]
+_focus_estado = {"variante": None, "respostas": {}}
+
+
+def _url_focus(nome_api: str, formato: bool, seguros: str, parenteses: bool) -> str:
+    filtro = f"Indicador eq '{nome_api}'"
+    if parenteses:
+        filtro = f"({filtro})"
+    partes = [("$filter", filtro), ("$orderby", "Data desc"), ("$top", "1000")]
+    if formato:
+        partes.append(("$format", "json"))
+    consulta = "&".join(f"{k}={quote(v, safe=seguros)}" for k, v in partes)
+    return f"{URL_FOCUS}?{consulta}"
+
+
+def consultar_focus(nome_api: str):
+    """Consulta o Focus de um indicador (uma vez por execução) e devolve o JSON."""
+    guardada = _focus_estado["respostas"].get(nome_api)
+    if guardada is not None:
+        return guardada
+    indices = list(range(len(FOCUS_VARIANTES)))
+    if _focus_estado["variante"] is not None:
+        indices.remove(_focus_estado["variante"])
+        indices.insert(0, _focus_estado["variante"])
+    ultimo_erro = None
+    for i in indices:
+        descricao, formato, seguros, parenteses = FOCUS_VARIANTES[i]
+        url = _url_focus(nome_api, formato, seguros, parenteses)
+        try:
+            resp = pedir_json(url, None, f"Focus {nome_api} [{descricao}]")
+        except RuntimeError as erro:
+            ultimo_erro = erro
+            print(f"  variante '{descricao}' recusada.")
+            continue
+        if isinstance(resp, dict) and isinstance(resp.get("value"), list):
+            if _focus_estado["variante"] != i:
+                print(f"  Focus: consulta aceita com a variante '{descricao}'.")
+            _focus_estado["variante"] = i
+            _focus_estado["respostas"][nome_api] = resp
+            return resp
+        ultimo_erro = RuntimeError(f"resposta inesperada: {str(resp)[:100]}")
+    raise ultimo_erro
+
+
 def coletar_focus_indicador(nome_api: str, ano: int):
     """Últimas medianas do Focus para um indicador e um ano de referência.
 
     Retorna (data_mais_recente, mediana, mediana_4_semanas_antes, minimo, maximo, n).
     """
-    # O serviço do Banco Central recusou (HTTP 400) filtros com vários "and".
-    # Por isso o filtro no servidor é só pelo indicador, e o ano de referência
-    # e a base de cálculo são filtrados aqui, no script. Os 1000 registros mais
-    # recentes cobrem bem mais de 4 semanas de pesquisas.
-    params = {
-        "$top": "1000",
-        "$format": "json",
-        "$orderby": "Data desc",
-        "$filter": f"Indicador eq '{nome_api}'",
-    }
-    resp = pedir_json(URL_FOCUS, params, f"Focus {nome_api} {ano}")
+    # Os 1000 registros mais recentes do indicador cobrem bem mais de 4 semanas
+    # de pesquisas. O ano de referência e a base de cálculo são filtrados aqui.
+    resp = consultar_focus(nome_api)
     linhas = resp.get("value") if isinstance(resp, dict) else None
     linhas = [
         l for l in (linhas or [])
@@ -413,6 +461,11 @@ def atualizar_focus() -> bool:
 
 
 def main() -> int:
+    if "--so-focus" in sys.argv:
+        # Teste rápido: só o Boletim Focus (leva poucos segundos).
+        ok = atualizar_focus()
+        print("focus:", "atualizado" if ok else "FALHOU")
+        return 0 if ok else 1
     resultados = {chave: atualizar_serie(chave, cfg) for chave, cfg in SERIES.items()}
     focus_ok = atualizar_focus()
 
