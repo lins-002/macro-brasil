@@ -30,7 +30,7 @@ PASTA_DADOS = RAIZ / "docs" / "data"
 URL_BASE = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.{codigo}/dados"
 TENTATIVAS = 5
 ESPERA_SEGUNDOS = 5  # espera crescente entre tentativas: 5s, 10s, 15s, 20s
-TIMEOUT = 20
+TIMEOUT = 30
 CABECALHOS = {
     "Accept": "application/json",
     "User-Agent": "macro-brasil-projeto-pessoal/1.0",
@@ -294,17 +294,23 @@ def coletar_focus_indicador(nome_api: str, ano: int):
 
     Retorna (data_mais_recente, mediana, mediana_4_semanas_antes, minimo, maximo, n).
     """
+    # O serviço do Banco Central recusou (HTTP 400) filtros com vários "and".
+    # Por isso o filtro no servidor é só pelo indicador, e o ano de referência
+    # e a base de cálculo são filtrados aqui, no script. Os 1000 registros mais
+    # recentes cobrem bem mais de 4 semanas de pesquisas.
     params = {
-        "$top": "40",
+        "$top": "1000",
         "$format": "json",
         "$orderby": "Data desc",
-        "$filter": (
-            f"Indicador eq '{nome_api}' and baseCalculo eq 0 "
-            f"and DataReferencia eq '{ano}'"
-        ),
+        "$filter": f"Indicador eq '{nome_api}'",
     }
     resp = pedir_json(URL_FOCUS, params, f"Focus {nome_api} {ano}")
     linhas = resp.get("value") if isinstance(resp, dict) else None
+    linhas = [
+        l for l in (linhas or [])
+        if str(l.get("DataReferencia")) == str(ano)
+        and str(l.get("baseCalculo")) == "0"
+    ]
     if not linhas:
         raise RuntimeError(f"Focus sem dados para {nome_api} {ano}")
 
