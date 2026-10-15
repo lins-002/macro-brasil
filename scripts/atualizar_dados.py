@@ -97,6 +97,15 @@ SERIES = {
         "somente_mudancas": False,
         "fonte": "Banco Central do Brasil (SGS 13762)",
     },
+    "divida_bruta_valor": {
+        "codigo": 13761,
+        "nome": "Dívida bruta do governo geral (saldo)",
+        "unidade": "R$ milhões",
+        "frequencia": "mensal",
+        "inicio": 2006,
+        "somente_mudancas": False,
+        "fonte": "Banco Central do Brasil (SGS 13761)",
+    },
 }
 
 # Expectativas de mercado (Boletim Focus): API Olinda do Banco Central.
