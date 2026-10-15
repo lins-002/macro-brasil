@@ -1,6 +1,6 @@
 """
-Atualiza os dados de macroeconomia brasileira a partir da API pública do
-Banco Central (SGS) e salva em arquivos JSON na pasta data/.
+Atualiza os dados de macroeconomia brasileira a partir das APIs públicas do
+Banco Central (SGS e Expectativas/Focus) e salva em arquivos JSON em docs/data/.
 
 Uso:
     python scripts/atualizar_dados.py
@@ -14,7 +14,7 @@ Regras de segurança:
 import json
 import sys
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -60,7 +60,56 @@ SERIES = {
         "somente_mudancas": True,
         "fonte": "Banco Central do Brasil (SGS 432)",
     },
+    "dolar": {
+        "codigo": 1,
+        "nome": "Dólar comercial (venda)",
+        "unidade": "R$",
+        "frequencia": "diaria",
+        "inicio": 2000,
+        "somente_mudancas": False,
+        "fonte": "Banco Central do Brasil (SGS 1)",
+    },
+    "desemprego": {
+        "codigo": 24369,
+        "nome": "Taxa de desocupação (PNAD Contínua)",
+        "unidade": "%",
+        "frequencia": "mensal",
+        "inicio": 2012,
+        "somente_mudancas": False,
+        "fonte": "IBGE / Banco Central do Brasil (SGS 24369)",
+    },
+    "ibcbr": {
+        "codigo": 24364,
+        "nome": "IBC-Br (com ajuste sazonal)",
+        "unidade": "índice (2002 = 100)",
+        "frequencia": "mensal",
+        "inicio": 2003,
+        "somente_mudancas": False,
+        "fonte": "Banco Central do Brasil (SGS 24364)",
+    },
+    "divida_bruta": {
+        "codigo": 13762,
+        "nome": "Dívida bruta do governo geral",
+        "unidade": "% do PIB",
+        "frequencia": "mensal",
+        "inicio": 2006,
+        "somente_mudancas": False,
+        "fonte": "Banco Central do Brasil (SGS 13762)",
+    },
 }
+
+# Expectativas de mercado (Boletim Focus): API Olinda do Banco Central.
+URL_FOCUS = (
+    "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/"
+    "ExpectativasMercadoAnuais"
+)
+# (nome na API, rótulo no site, unidade, casas decimais)
+FOCUS_INDICADORES = [
+    ("IPCA", "IPCA", "%", 2),
+    ("Selic", "Selic (fim do ano)", "%", 2),
+    ("Câmbio", "Dólar (fim do ano)", "R$", 2),
+    ("PIB Total", "PIB (crescimento)", "%", 2),
+]
 
 
 # ----------------------------------------------------------------------
@@ -81,14 +130,8 @@ def gerar_periodos(ano_inicial: int, ano_final: int, anos_por_bloco: int = 10):
     return periodos
 
 
-def buscar_periodo(codigo: int, data_inicial: str, data_final: str):
-    """Busca um período com retentativas. Retorna lista ou levanta erro."""
-    url = URL_BASE.format(codigo=codigo)
-    params = {
-        "formato": "json",
-        "dataInicial": data_inicial,
-        "dataFinal": data_final,
-    }
+def pedir_json(url: str, params: dict, descricao: str):
+    """GET com retentativas. Retorna o JSON ou levanta RuntimeError."""
     ultimo_erro = None
     for tentativa in range(1, TENTATIVAS + 1):
         definitivo = False
@@ -105,10 +148,7 @@ def buscar_periodo(codigo: int, data_inicial: str, data_final: str):
                     and resposta.status_code not in HTTP_REPETIVEIS
                 )
                 raise RuntimeError(f"HTTP {resposta.status_code}: {trecho!r}")
-            dados = resposta.json()
-            if not isinstance(dados, list):
-                raise ValueError(f"Resposta inesperada: {str(dados)[:100]}")
-            return dados
+            return resposta.json()
         except Exception as erro:  # noqa: BLE001
             ultimo_erro = erro
             print(f"  tentativa {tentativa}/{TENTATIVAS} falhou: {erro}")
@@ -116,9 +156,22 @@ def buscar_periodo(codigo: int, data_inicial: str, data_final: str):
                 break
             if tentativa < TENTATIVAS:
                 time.sleep(ESPERA_SEGUNDOS * tentativa)
-    raise RuntimeError(
-        f"Falhou ({data_inicial} a {data_final}): {ultimo_erro}"
+    raise RuntimeError(f"Falhou ({descricao}): {ultimo_erro}")
+
+
+def buscar_periodo(codigo: int, data_inicial: str, data_final: str):
+    """Busca um período da série SGS. Retorna lista ou levanta erro."""
+    params = {
+        "formato": "json",
+        "dataInicial": data_inicial,
+        "dataFinal": data_final,
+    }
+    dados = pedir_json(
+        URL_BASE.format(codigo=codigo), params, f"{data_inicial} a {data_final}"
     )
+    if not isinstance(dados, list):
+        raise RuntimeError(f"Resposta inesperada: {str(dados)[:100]}")
+    return dados
 
 
 def converter(registros_brutos):
@@ -228,19 +281,148 @@ def atualizar_serie(chave: str, cfg: dict) -> bool:
     return True
 
 
+def _num(valor):
+    """Converte para float; devolve None se vier vazio ou inválido."""
+    try:
+        return float(valor)
+    except (TypeError, ValueError):
+        return None
+
+
+def coletar_focus_indicador(nome_api: str, ano: int):
+    """Últimas medianas do Focus para um indicador e um ano de referência.
+
+    Retorna (data_mais_recente, mediana, mediana_4_semanas_antes, minimo, maximo, n).
+    """
+    params = {
+        "$top": "40",
+        "$format": "json",
+        "$orderby": "Data desc",
+        "$filter": (
+            f"Indicador eq '{nome_api}' and baseCalculo eq 0 "
+            f"and DataReferencia eq '{ano}'"
+        ),
+    }
+    resp = pedir_json(URL_FOCUS, params, f"Focus {nome_api} {ano}")
+    linhas = resp.get("value") if isinstance(resp, dict) else None
+    if not linhas:
+        raise RuntimeError(f"Focus sem dados para {nome_api} {ano}")
+
+    # Alguns indicadores podem ter mais de um "detalhe". Prefere "Fim do ano";
+    # se não houver, usa o primeiro que aparecer.
+    detalhes = []
+    for linha in linhas:
+        det = linha.get("IndicadorDetalhe")
+        if det not in detalhes:
+            detalhes.append(det)
+    escolhido = next(
+        (d for d in detalhes if d and "fim do ano" in str(d).lower()), detalhes[0]
+    )
+    linhas = [l for l in linhas if l.get("IndicadorDetalhe") == escolhido]
+
+    por_data = {}
+    for linha in linhas:
+        mediana = _num(linha.get("Mediana"))
+        data = str(linha.get("Data") or "")[:10]
+        if mediana is None or len(data) != 10:
+            continue
+        por_data[data] = (mediana, linha)
+    if not por_data:
+        raise RuntimeError(f"Focus sem medianas válidas para {nome_api} {ano}")
+
+    datas = sorted(por_data, reverse=True)
+    recente = datas[0]
+    mediana, linha = por_data[recente]
+
+    # Valor de cerca de 4 semanas antes, para mostrar a tendência.
+    limite = (date.fromisoformat(recente) - timedelta(days=28)).isoformat()
+    antes = next((d for d in datas if d <= limite), None)
+    anterior = por_data[antes][0] if antes else None
+    n = linha.get("numeroRespondentes")
+    return (
+        recente,
+        mediana,
+        anterior,
+        _num(linha.get("Minimo")),
+        _num(linha.get("Maximo")),
+        int(n) if _num(n) is not None else None,
+    )
+
+
+def atualizar_focus() -> bool:
+    print("\n=== Expectativas de mercado (Boletim Focus) ===")
+    hoje = date.today()
+    anos = [hoje.year, hoje.year + 1]
+    indicadores = []
+    data_pesquisa = None
+    try:
+        for nome_api, rotulo, unidade, casas in FOCUS_INDICADORES:
+            valores = {}
+            for ano in anos:
+                recente, med, ant, minimo, maximo, n = coletar_focus_indicador(
+                    nome_api, ano
+                )
+                print(f"  {nome_api} {ano}: mediana {med} ({recente})")
+                valores[str(ano)] = {
+                    "mediana": med,
+                    "anterior": ant,
+                    "minimo": minimo,
+                    "maximo": maximo,
+                    "respondentes": n,
+                }
+                if data_pesquisa is None or recente > data_pesquisa:
+                    data_pesquisa = recente
+            indicadores.append(
+                {"id": nome_api, "nome": rotulo, "unidade": unidade,
+                 "casas": casas, "valores": valores}
+            )
+    except RuntimeError as erro:
+        print(f"ERRO: {erro}")
+        print("Mantendo o arquivo antigo do Focus (se existir).")
+        return False
+
+    conteudo = {
+        "serie": "focus",
+        "nome": "Expectativas de mercado (Boletim Focus) - mediana",
+        "fonte": "Banco Central do Brasil - Expectativas de Mercado (Focus)",
+        "data_pesquisa": data_pesquisa,
+        "anos": anos,
+        "indicadores": indicadores,
+    }
+    caminho = PASTA_DADOS / "focus.json"
+    if caminho.exists():
+        try:
+            with open(caminho, encoding="utf-8") as f:
+                antigo = json.load(f)
+            antigo.pop("atualizado_em", None)
+            if antigo == conteudo:
+                print("Sem mudanças no Focus. Arquivo mantido.")
+                return True
+        except (OSError, ValueError):
+            pass
+    conteudo["atualizado_em"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    salvar_json(caminho, conteudo)
+    print(f"OK: Focus salvo (pesquisa de {data_pesquisa}).")
+    return True
+
+
 def main() -> int:
     resultados = {chave: atualizar_serie(chave, cfg) for chave, cfg in SERIES.items()}
+    focus_ok = atualizar_focus()
 
     print("\n=== Resumo ===")
     for chave, ok in resultados.items():
         print(f"{chave}: {'atualizado' if ok else 'FALHOU (dados antigos mantidos)'}")
+    print(f"focus: {'atualizado' if focus_ok else 'FALHOU (dados antigos mantidos)'}")
 
-    # Código de saída diferente de zero faz o GitHub Actions marcar a execução
-    # como falha e te avisar por e-mail (útil na Etapa 3).
+    # A data de "última verificação" vale para as séries do SGS. O Focus vem de
+    # outro serviço do Banco Central: se só ele falhar, a execução ainda é marcada
+    # como falha (você é avisado), mas a data de verificação das demais é mantida.
     if all(resultados.values()):
         salvar_status()
-        return 0
-    return 1
+    # Código de saída diferente de zero faz o GitHub Actions marcar a execução
+    # como falha e te avisar por e-mail.
+    return 0 if (all(resultados.values()) and focus_ok) else 1
 
 
 if __name__ == "__main__":
