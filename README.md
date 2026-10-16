@@ -29,7 +29,7 @@ python scripts/atualizar_dados.py
 | `docs/data/ibcbr.json` | IBC-Br com ajuste sazonal (prévia do PIB) | 24364 |
 | `docs/data/divida_bruta.json` | Dívida bruta do governo geral (% do PIB) | 13762 |
 | `docs/data/divida_bruta_valor.json` | Dívida bruta do governo geral (saldo em R$ milhões; colunas do gráfico) | 13761 |
-| `docs/data/pib.json` | PIB: variação trimestral e anual (IBGE, SIDRA tabela 5932) | SIDRA 5932 |
+| `docs/data/pib.json` | PIB: crescimento real (SIDRA 5932) e valor nominal (SIDRA 1846), por trimestre e por ano (IBGE) | SIDRA 5932 |
 | `docs/data/focus.json` | Expectativas do mercado (Boletim Focus, mediana): IPCA, Selic, dólar e PIB do ano atual e do próximo | API Olinda |
 | `docs/data/combustiveis.json` | Preço médio mensal dos combustíveis e GLP (ANP) | - |
 
