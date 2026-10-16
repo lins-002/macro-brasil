@@ -1,8 +1,7 @@
 // Macro Brasil - PIB (IBGE, Contas Nacionais Trimestrais).
-// Lê docs/data/pib.json e desenha dois gráficos:
-//  1) trimestral: colunas = variação sobre o trimestre anterior (com ajuste
-//     sazonal); linha = variação sobre o mesmo trimestre do ano anterior;
-//  2) anual: crescimento de cada ano. O ano em andamento aparece com asterisco
+// Lê docs/data/pib.json. O cartão de cima mostra o último trimestre e o gráfico
+// é anual: colunas = PIB nominal em R$ trilhões (eixo esquerdo); linha =
+// crescimento real em % (eixo direito). O ano em andamento aparece com asterisco
 //     (ex.: "2026*") e mostra o acumulado até o último trimestre divulgado.
 // Usa funções de app.js: css(), fmtNumero(), estado (período escolhido).
 
@@ -65,78 +64,35 @@ function pibOpcoesBase(rotuloY) {
   };
 }
 
-function pibDesenharTrimestral(json) {
-  const ctx = document.getElementById("grafico-pib-tri");
-  if (!ctx) return;
-  if (PIB.graficos.tri) PIB.graficos.tri.destroy();
-  const dados = pibRecortar(json.trimestral, false);
-  const cor = css("--azul");
-  const neg = css("--vermelho");
-  const linha = css("--laranja");
-  const rotulos = dados.map((d) => `${d.tri}T${String(d.ano).slice(2)}`);
-
-  const opcoes = pibOpcoesBase("");
-  opcoes.plugins = {
-    legend: { display: true, labels: { color: css("--suave"), boxWidth: 12 } },
-    tooltip: {
-      callbacks: {
-        title: (itens) => {
-          const d = dados[itens[0].dataIndex];
-          return pibNomeTri(d.tri, d.ano);
-        },
-        label: (item) =>
-          ` ${item.dataset.label}: ${item.parsed.y == null ? "—" : pibFmtPct(item.parsed.y)}`,
-      },
-    },
-  };
-  PIB.graficos.tri = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels: rotulos,
-      datasets: [
-        {
-          type: "bar",
-          label: "Contra o trimestre anterior",
-          data: dados.map((d) => d.qoq),
-          backgroundColor: dados.map((d) => (d.qoq != null && d.qoq < 0 ? neg : cor)),
-          order: 2,
-        },
-        {
-          type: "line",
-          label: "Contra o mesmo trimestre do ano anterior",
-          data: dados.map((d) => d.yoy),
-          borderColor: linha,
-          backgroundColor: linha,
-          borderWidth: 2,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          tension: 0,
-          spanGaps: true,
-          order: 1,
-        },
-      ],
-    },
-    options: opcoes,
-  });
-}
-
 function pibDesenharAnual(json) {
   const ctx = document.getElementById("grafico-pib-ano");
   if (!ctx) return;
   if (PIB.graficos.ano) PIB.graficos.ano.destroy();
   const dados = pibRecortar(json.anual, true);
   const cor = css("--azul");
-  const neg = css("--vermelho");
+  const linha = css("--laranja");
   const rotulos = dados.map((d) => (d.parcial ? `${d.ano}*` : String(d.ano)));
   // O ano em andamento fica mais claro, para não ser confundido com um ano fechado.
-  const cores = dados.map((d) => {
-    const base = d.valor < 0 ? neg : cor;
-    return d.parcial ? base + "88" : base;
-  });
+  const cores = dados.map((d) => (d.parcial ? cor + "88" : cor));
+  const tri = (v) => `R$ ${fmtNumero(v / 1e6, 2)} tri`; // R$ milhões -> trilhões
 
   const opcoes = pibOpcoesBase("");
+  opcoes.scales.y = {
+    position: "left",
+    beginAtZero: true,
+    grid: { color: css("--grade") },
+    ticks: {
+      color: css("--suave"),
+      callback: (v) => `R$ ${fmtNumero(v, Number.isInteger(v) ? 0 : 1)} tri`,
+    },
+  };
+  opcoes.scales.y1 = {
+    position: "right",
+    grid: { drawOnChartArea: false },
+    ticks: { color: css("--suave"), callback: (v) => fmtNumero(v, 0) + "%" },
+  };
   opcoes.plugins = {
-    legend: { display: false },
+    legend: { display: true, labels: { color: css("--suave"), boxWidth: 12 } },
     tooltip: {
       callbacks: {
         title: (itens) => {
@@ -145,16 +101,46 @@ function pibDesenharAnual(json) {
         },
         label: (item) => {
           const d = dados[item.dataIndex];
+          if (item.datasetIndex === 0) {
+            return d.parcial
+              ? ` PIB nominal: ${tri(d.nominal)} somados até o ${d.ate_trimestre}º trimestre`
+              : ` PIB nominal: ${tri(d.nominal)}`;
+          }
           return d.parcial
-            ? ` ${pibFmtPct(d.valor)} acumulado até o ${d.ate_trimestre}º trimestre`
-            : ` ${pibFmtPct(d.valor)} no ano`;
+            ? ` Crescimento real: ${pibFmtPct(d.valor)} acumulado até o ${d.ate_trimestre}º trimestre`
+            : ` Crescimento real: ${pibFmtPct(d.valor)}`;
         },
       },
     },
   };
   PIB.graficos.ano = new Chart(ctx, {
     type: "bar",
-    data: { labels: rotulos, datasets: [{ label: "PIB", data: dados.map((d) => d.valor), backgroundColor: cores }] },
+    data: {
+      labels: rotulos,
+      datasets: [
+        {
+          type: "bar",
+          label: "PIB nominal (R$ trilhões)",
+          data: dados.map((d) => (d.nominal == null ? null : d.nominal / 1e6)),
+          backgroundColor: cores,
+          yAxisID: "y",
+          order: 2,
+        },
+        {
+          type: "line",
+          label: "Crescimento real (% ao ano)",
+          data: dados.map((d) => d.valor),
+          borderColor: linha,
+          backgroundColor: linha,
+          borderWidth: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          tension: 0,
+          yAxisID: "y1",
+          order: 1,
+        },
+      ],
+    },
     options: opcoes,
   });
 
@@ -163,15 +149,15 @@ function pibDesenharAnual(json) {
   const parcial = json.anual.find((d) => d.parcial);
   if (nota) {
     nota.textContent = parcial
-      ? `* ${parcial.ano} ainda está em andamento: o valor é o acumulado até o ${parcial.ate_trimestre}º trimestre, ` +
-        `em relação ao mesmo período de ${parcial.ano - 1}. Vira definitivo quando o 4º trimestre for divulgado.`
+      ? `* ${parcial.ano} ainda está em andamento: o PIB nominal soma os trimestres já divulgados (até o ` +
+        `${parcial.ate_trimestre}º) e o crescimento é o acumulado até o ${parcial.ate_trimestre}º trimestre, ` +
+        `em relação ao mesmo período de ${parcial.ano - 1}. Os dois valores ficam definitivos quando o 4º trimestre for divulgado.`
       : "";
   }
 }
 
 function pibDesenhar() {
   if (!PIB.json) return;
-  pibDesenharTrimestral(PIB.json);
   pibDesenharAnual(PIB.json);
 }
 
@@ -186,16 +172,9 @@ async function pibIniciar() {
     PIB.json = json;
     pibPreencherKpi(json);
     pibDesenhar();
-    const fonte = document.getElementById("fonte-pib-tri");
-    const u = pibUltimo(json.trimestral, "qoq");
-    if (fonte && u) {
-      fonte.textContent =
-        `Variação real do PIB (volume). Fonte: IBGE. Último dado: ${pibNomeTri(u.tri, u.ano)}.`;
-    }
   } catch (erro) {
     console.error("pib", erro);
     const msg = `Não foi possível carregar o PIB (${erro.message}).`;
-    pibErro("pib-tri", msg);
     pibErro("pib-ano", msg);
     const card = document.getElementById("kpi-pib");
     if (card) {
