@@ -1,2 +1,0 @@
-Esta pasta guarda os arquivos JSON gerados por scripts/atualizar_dados.py
-(ipca.json, selic.json, ...). Eles são criados automaticamente.
