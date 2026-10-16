@@ -469,19 +469,118 @@ def atualizar_focus() -> bool:
     return True
 
 
+# PIB: IBGE, Contas Nacionais Trimestrais (SIDRA, tabela 5932, "PIB a preços de
+# mercado"). Variáveis: 6561 = contra o mesmo trimestre do ano anterior;
+# 6562 = acumulada em 4 trimestres; 6563 = acumulada no ano (contra o mesmo
+# período do ano anterior); 6564 = contra o trimestre imediatamente anterior
+# (série com ajuste sazonal).
+URL_PIB = (
+    "https://apisidra.ibge.gov.br/values/t/5932/n1/all/v/6561,6562,6563,6564"
+    "/p/all/c11255/90707"
+)
+PIB_VARIAVEIS = {"6561": "yoy", "6562": "acum_4tri", "6563": "acum_ano", "6564": "qoq"}
+
+
+def montar_pib(linhas):
+    """Transforma a resposta do SIDRA em {'trimestral': [...], 'anual': [...]}.
+
+    Anual: valor = taxa acumulada no ano até o último trimestre divulgado.
+    Se esse trimestre não for o 4º, o ano é "parcial" (o site põe asterisco).
+    """
+    por_periodo = {}
+    for linha in linhas:
+        campo = PIB_VARIAVEIS.get(str(linha.get("D2C")))
+        periodo = str(linha.get("D3C") or "")
+        if not campo or len(periodo) != 6 or not periodo.isdigit():
+            continue
+        valor = _num(linha.get("V"))  # "-", "..." e "X" viram None
+        por_periodo.setdefault(periodo, {})[campo] = valor
+
+    trimestral = []
+    for periodo in sorted(por_periodo):
+        ano, tri = int(periodo[:4]), int(periodo[4:])
+        if tri not in (1, 2, 3, 4):
+            continue
+        item = {"periodo": f"{ano}-T{tri}", "ano": ano, "tri": tri,
+                "data": f"{ano}-{(tri - 1) * 3 + 1:02d}-01"}
+        item.update({c: por_periodo[periodo].get(c) for c in PIB_VARIAVEIS.values()})
+        if all(item[c] is None for c in PIB_VARIAVEIS.values()):
+            continue
+        trimestral.append(item)
+
+    anual = []
+    for ano in sorted({i["ano"] for i in trimestral}):
+        com_valor = [i for i in trimestral if i["ano"] == ano and i["acum_ano"] is not None]
+        if not com_valor:
+            continue
+        ultimo = max(com_valor, key=lambda i: i["tri"])
+        anual.append({"ano": ano, "valor": ultimo["acum_ano"],
+                      "ate_trimestre": ultimo["tri"], "parcial": ultimo["tri"] < 4})
+    return {"trimestral": trimestral, "anual": anual}
+
+
+def atualizar_pib() -> bool:
+    print("\n=== PIB (IBGE - Contas Nacionais Trimestrais, SIDRA 5932) ===")
+    try:
+        resp = pedir_json(URL_PIB, None, "PIB (SIDRA 5932)")
+        if not isinstance(resp, list) or len(resp) < 2:
+            raise RuntimeError(f"Resposta inesperada: {str(resp)[:100]}")
+        # A primeira linha do SIDRA é o cabeçalho (nomes das colunas).
+        dados = montar_pib(resp[1:])
+    except RuntimeError as erro:
+        print(f"ERRO: {erro}")
+        print("Mantendo o arquivo antigo do PIB (se existir).")
+        return False
+    if len(dados["trimestral"]) < 40 or not dados["anual"]:
+        print("ERRO: poucos dados do PIB recebidos, descartando coleta.")
+        return False
+
+    conteudo = {
+        "serie": "pib",
+        "nome": "PIB a preços de mercado - variação real",
+        "unidade": "%",
+        "fonte": "IBGE - Contas Nacionais Trimestrais (SIDRA, tabela 5932)",
+        **dados,
+    }
+    caminho = PASTA_DADOS / "pib.json"
+    if caminho.exists():
+        try:
+            with open(caminho, encoding="utf-8") as f:
+                antigo = json.load(f)
+            antigo.pop("atualizado_em", None)
+            if antigo == conteudo:
+                print("Sem mudanças no PIB. Arquivo mantido.")
+                return True
+        except (OSError, ValueError):
+            pass
+    conteudo["atualizado_em"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    salvar_json(caminho, conteudo)
+    ult = dados["trimestral"][-1]
+    print(f"OK: PIB salvo ({len(dados['trimestral'])} trimestres, "
+          f"{len(dados['anual'])} anos). Último trimestre: {ult['periodo']}.")
+    return True
+
+
 def main() -> int:
     if "--so-focus" in sys.argv:
         # Teste rápido: só o Boletim Focus (leva poucos segundos).
         ok = atualizar_focus()
         print("focus:", "atualizado" if ok else "FALHOU")
         return 0 if ok else 1
+    if "--so-pib" in sys.argv:
+        # Teste rápido: só o PIB do IBGE.
+        ok = atualizar_pib()
+        print("pib:", "atualizado" if ok else "FALHOU")
+        return 0 if ok else 1
     resultados = {chave: atualizar_serie(chave, cfg) for chave, cfg in SERIES.items()}
     focus_ok = atualizar_focus()
+    pib_ok = atualizar_pib()
 
     print("\n=== Resumo ===")
     for chave, ok in resultados.items():
         print(f"{chave}: {'atualizado' if ok else 'FALHOU (dados antigos mantidos)'}")
     print(f"focus: {'atualizado' if focus_ok else 'FALHOU (dados antigos mantidos)'}")
+    print(f"pib: {'atualizado' if pib_ok else 'FALHOU (dados antigos mantidos)'}")
 
     # A data de "última verificação" vale para as séries do SGS. O Focus vem de
     # outro serviço do Banco Central: se só ele falhar, a execução ainda é marcada
@@ -490,7 +589,7 @@ def main() -> int:
         salvar_status()
     # Código de saída diferente de zero faz o GitHub Actions marcar a execução
     # como falha e te avisar por e-mail.
-    return 0 if (all(resultados.values()) and focus_ok) else 1
+    return 0 if (all(resultados.values()) and focus_ok and pib_ok) else 1
 
 
 if __name__ == "__main__":
