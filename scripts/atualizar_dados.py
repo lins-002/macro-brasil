@@ -478,15 +478,28 @@ URL_PIB = (
     "https://apisidra.ibge.gov.br/values/t/5932/n1/all/v/6561,6562,6563,6564"
     "/p/all/c11255/90707"
 )
+# Valor nominal: tabela 1846 (SIDRA), variável 585 = valores a preços correntes,
+# em R$ milhões, por trimestre. O PIB nominal de um ano é a soma dos 4 trimestres.
+URL_PIB_VALOR = (
+    "https://apisidra.ibge.gov.br/values/t/1846/n1/all/v/585/p/all/c11255/90707"
+)
 PIB_VARIAVEIS = {"6561": "yoy", "6562": "acum_4tri", "6563": "acum_ano", "6564": "qoq"}
 
 
-def montar_pib(linhas):
+def montar_pib(linhas, linhas_valor=()):
     """Transforma a resposta do SIDRA em {'trimestral': [...], 'anual': [...]}.
 
-    Anual: valor = taxa acumulada no ano até o último trimestre divulgado.
-    Se esse trimestre não for o 4º, o ano é "parcial" (o site põe asterisco).
+    Anual: "valor" = taxa de crescimento acumulada no ano até o último trimestre
+    divulgado; "nominal" = PIB em R$ milhões somando os trimestres até esse ponto.
+    Se o último trimestre não for o 4º, o ano é "parcial" (o site põe asterisco).
     """
+    nominal_por_periodo = {}
+    for linha in linhas_valor:
+        periodo = str(linha.get("D3C") or "")
+        valor = _num(linha.get("V"))
+        if len(periodo) == 6 and periodo.isdigit() and valor is not None:
+            nominal_por_periodo[periodo] = valor
+
     por_periodo = {}
     for linha in linhas:
         campo = PIB_VARIAVEIS.get(str(linha.get("D2C")))
@@ -504,6 +517,7 @@ def montar_pib(linhas):
         item = {"periodo": f"{ano}-T{tri}", "ano": ano, "tri": tri,
                 "data": f"{ano}-{(tri - 1) * 3 + 1:02d}-01"}
         item.update({c: por_periodo[periodo].get(c) for c in PIB_VARIAVEIS.values()})
+        item["nominal"] = nominal_por_periodo.get(periodo)  # R$ milhões no trimestre
         if all(item[c] is None for c in PIB_VARIAVEIS.values()):
             continue
         trimestral.append(item)
@@ -514,7 +528,11 @@ def montar_pib(linhas):
         if not com_valor:
             continue
         ultimo = max(com_valor, key=lambda i: i["tri"])
-        anual.append({"ano": ano, "valor": ultimo["acum_ano"],
+        # Soma dos trimestres 1..último; se faltar algum, o nominal fica vazio.
+        tris = {i["tri"]: i["nominal"] for i in trimestral if i["ano"] == ano}
+        partes = [tris.get(n) for n in range(1, ultimo["tri"] + 1)]
+        nominal = None if any(v is None for v in partes) else round(sum(partes), 1)
+        anual.append({"ano": ano, "valor": ultimo["acum_ano"], "nominal": nominal,
                       "ate_trimestre": ultimo["tri"], "parcial": ultimo["tri"] < 4})
     return {"trimestral": trimestral, "anual": anual}
 
@@ -526,12 +544,16 @@ def atualizar_pib() -> bool:
         if not isinstance(resp, list) or len(resp) < 2:
             raise RuntimeError(f"Resposta inesperada: {str(resp)[:100]}")
         # A primeira linha do SIDRA é o cabeçalho (nomes das colunas).
-        dados = montar_pib(resp[1:])
+        resp_valor = pedir_json(URL_PIB_VALOR, None, "PIB nominal (SIDRA 1846)")
+        if not isinstance(resp_valor, list) or len(resp_valor) < 2:
+            raise RuntimeError(f"Resposta inesperada (valor): {str(resp_valor)[:100]}")
+        dados = montar_pib(resp[1:], resp_valor[1:])
     except RuntimeError as erro:
         print(f"ERRO: {erro}")
         print("Mantendo o arquivo antigo do PIB (se existir).")
         return False
-    if len(dados["trimestral"]) < 40 or not dados["anual"]:
+    if (len(dados["trimestral"]) < 40 or not dados["anual"]
+            or not any(a["nominal"] for a in dados["anual"])):
         print("ERRO: poucos dados do PIB recebidos, descartando coleta.")
         return False
 
