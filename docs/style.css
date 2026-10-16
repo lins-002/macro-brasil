@@ -225,3 +225,5 @@ body {
 @media (max-width: 520px) {
   .grade-graficos { grid-template-columns: 1fr; }
 }
+
+.grade-graficos + .grade-graficos { margin-top: 16px; }

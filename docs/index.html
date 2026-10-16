@@ -67,6 +67,11 @@
         <p class="valor">…</p>
         <p class="detalhe">Carregando</p>
       </article>
+      <article class="kpi" id="kpi-pib">
+        <h2>PIB (último trimestre)</h2>
+        <p class="valor">…</p>
+        <p class="detalhe">Carregando</p>
+      </article>
       <article class="kpi" id="kpi-ibcbr">
         <h2>IBC-Br (atividade)</h2>
         <p class="valor">…</p>
@@ -106,6 +111,23 @@
         <p class="fonte">Colunas: saldo em R$ trilhões (eixo esquerdo). Linha: % do PIB (eixo direito). Fonte: Banco Central (SGS 13761 e 13762)</p>
         <div class="grafico"><canvas id="grafico-divida_bruta" role="img" aria-label="Gráfico da dívida bruta: saldo em reais (colunas) e percentual do PIB (linha)"></canvas></div>
         <p class="erro" id="erro-divida_bruta" hidden></p>
+      </section>
+    </div>
+
+    <div class="grade-graficos grade-pib">
+      <section class="cartao">
+        <h2>PIB por trimestre</h2>
+        <p class="fonte" id="fonte-pib-tri">Variação real do PIB (volume). Fonte: IBGE</p>
+        <div class="grafico"><canvas id="grafico-pib-tri" role="img" aria-label="Gráfico da variação trimestral do PIB"></canvas></div>
+        <p class="erro" id="erro-pib-tri" hidden></p>
+      </section>
+
+      <section class="cartao">
+        <h2>PIB por ano</h2>
+        <p class="fonte">Crescimento real de cada ano. Fonte: IBGE</p>
+        <div class="grafico"><canvas id="grafico-pib-ano" role="img" aria-label="Gráfico do crescimento anual do PIB"></canvas></div>
+        <p class="nota" id="nota-pib-ano"></p>
+        <p class="erro" id="erro-pib-ano" hidden></p>
       </section>
     </div>
 
@@ -169,6 +191,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
   <script src="app.js"></script>
+  <script src="pib.js"></script>
   <script src="combustiveis.js"></script>
 </body>
 </html>
