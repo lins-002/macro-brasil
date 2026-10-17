@@ -1,40 +1,52 @@
 :root {
-  --bg: #f6f7f9;
+  /* Paleta da marca (gradiente azul -> verde -> amarelo) */
+  --p1: #3c8fb4;
+  --p2: #00abc0;
+  --p3: #00c5ba;
+  --p4: #5cdca3;
+  --p5: #a9ee86;
+  --p6: #f9f871;
+
+  --bg: #f1f7f9;
   --card: #ffffff;
-  --texto: #1b1f24;
-  --suave: #5b6670;
-  --borda: #e1e5ea;
-  --grade: #e8ebef;
-  --azul: #1f6feb;
-  --laranja: #d9730d;
-  --verde: #1a8f55;
-  --roxo: #7c4dff;
+  --texto: #14262f;
+  --suave: #56707c;
+  --borda: #d8e6ec;
+  --grade: #e6eff3;
+  --cabecalho: #0d3446;
+  --cabecalho-texto: #eaf6fa;
+  /* Cores dos gráficos: tons mais escuros da paleta, para dar contraste sobre o branco */
+  --azul: #2b7ba3;
+  --ciano: #0a93a6;
+  --verde: #0f9f8e;
+  --roxo: #6f56d9;
+  --laranja: #dd7a1a;
   --vermelho: #d6336c;
-  --ciano: #0f8fa8;
   --sobe: #c0392b;
-  --desce: #1a8f55;
-  --botao-ativo: #1f6feb;
+  --desce: #0f8a5f;
+  --botao-ativo: #2b7ba3;
   --botao-ativo-texto: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1318;
-    --card: #181d24;
-    --texto: #e8ecf1;
-    --suave: #94a0ad;
-    --borda: #2a313a;
-    --grade: #262d36;
-    --azul: #5aa2ff;
-    --laranja: #f0974a;
-    --verde: #4cc38a;
+    --bg: #0b171d;
+    --card: #12232c;
+    --texto: #e6f1f5;
+    --suave: #8fa8b3;
+    --borda: #213742;
+    --grade: #1c2f39;
+    --cabecalho: #08222d;
+    --azul: #3c8fb4;
+    --ciano: #00abc0;
+    --verde: #5cdca3;
     --roxo: #a78bfa;
+    --laranja: #f0974a;
     --vermelho: #f06595;
-    --ciano: #4fc3d9;
     --sobe: #ff7b72;
-    --desce: #4cc38a;
-    --botao-ativo: #5aa2ff;
-    --botao-ativo-texto: #0f1318;
+    --desce: #5cdca3;
+    --botao-ativo: #5cdca3;
+    --botao-ativo-texto: #08222d;
   }
 }
 
@@ -48,21 +60,18 @@ body {
   line-height: 1.5;
 }
 
-.topo, main, .rodape {
-  max-width: 960px;
+main, .rodape, .cabecalho-interno, .barra-periodo {
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 0 16px;
+  padding-left: 24px;
+  padding-right: 24px;
 }
-
-.topo { padding-top: 32px; padding-bottom: 8px; }
-.topo h1 { margin: 0; font-size: 1.8rem; }
-.sub { margin: 4px 0 0; color: var(--suave); }
 
 .kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
-  margin: 20px 0;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin: 0 0 18px;
 }
 
 .kpi, .cartao {
@@ -227,3 +236,111 @@ body {
 }
 
 .grade-graficos + .grade-graficos { margin-top: 16px; }
+
+/* ---------- IPCA por grupos ---------- */
+.subtitulo { margin: 16px 0 6px; font-size: 0.95rem; font-weight: 600; }
+.subtitulo::first-letter { text-transform: uppercase; }
+.grafico.grupos-barras { height: 380px; }
+@media (max-width: 480px) { .grafico.grupos-barras { height: 340px; } }
+
+
+/* ---------- Cabeçalho horizontal e menu ---------- */
+.cabecalho {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--cabecalho);
+  color: var(--cabecalho-texto);
+}
+.cabecalho-interno {
+  display: flex;
+  align-items: center;
+  gap: 36px;
+  min-height: 68px;
+}
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+  text-decoration: none;
+  flex: none;
+}
+.marca-nome { font-size: 1.35rem; font-weight: 700; letter-spacing: 0.01em; }
+.faixa-paleta {
+  height: 4px;
+  background: linear-gradient(90deg, var(--p1), var(--p2), var(--p3), var(--p4), var(--p5), var(--p6));
+}
+.menu { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 4px 0; }
+.menu::-webkit-scrollbar { display: none; }
+.aba {
+  flex: none;
+  padding: 9px 18px;
+  border-radius: 999px;
+  color: var(--cabecalho-texto);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.98rem;
+  border: 1px solid transparent;
+}
+.aba:hover { background: rgba(255, 255, 255, 0.12); }
+.aba.ativa { background: var(--p4); color: #08222d; }
+.aba:focus-visible, .marca:focus-visible, .controles button:focus-visible,
+.atalhos button:focus-visible, .chip:focus-visible {
+  outline: 3px solid var(--p6);
+  outline-offset: 2px;
+}
+
+/* ---------- Seções (cada uma é uma "página") ---------- */
+main { padding-top: 22px; padding-bottom: 40px; }
+.secao[hidden] {
+  /* Fica fora da tela, mas com tamanho: os gráficos já nascem do tamanho certo. */
+  display: block;
+  visibility: hidden;
+  position: absolute;
+  left: -99999px;
+  top: 0;
+  width: 1200px;
+  height: 0;
+  overflow: hidden;
+}
+.titulo-secao { margin: 4px 0 2px; font-size: 1.6rem; }
+.intro { margin: 0 0 18px; color: var(--suave); }
+
+.barra-periodo { padding-top: 14px; padding-bottom: 0; }
+.barra-periodo[hidden] { display: none; }
+.barra-periodo .controles { margin-bottom: 0; }
+
+.kpis-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.kpis-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.kpi h3 { margin: 0; font-size: 0.9rem; font-weight: 600; color: var(--suave); }
+.kpi { border-top: 3px solid var(--p2); }
+.kpi:nth-child(5n+1) { border-top-color: var(--p1); }
+.kpi:nth-child(5n+3) { border-top-color: var(--p3); }
+.kpi:nth-child(5n+4) { border-top-color: var(--p4); }
+.kpi:nth-child(5n+5) { border-top-color: var(--p5); }
+.cartao h3 { margin: 0; font-size: 1.1rem; }
+
+.grade-graficos { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 16px; }
+.grade-graficos .cartao.largo { grid-column: 1 / -1; }
+.grade-graficos .grafico { height: 300px; }
+.grade-graficos .largo .grafico { height: 340px; }
+#sec-juros .cartao { margin-bottom: 0; }
+#sec-juros .grade-graficos { margin-bottom: 16px; }
+
+.em-breve p { margin: 8px 0 0; color: var(--suave); }
+.em-breve { border-left: 4px solid var(--p5); }
+
+@media (max-width: 1100px) {
+  .kpis-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .cabecalho-interno { flex-direction: column; align-items: flex-start; gap: 4px; padding-top: 10px; padding-bottom: 6px; }
+  .menu { width: 100%; }
+  .grade-graficos { grid-template-columns: 1fr; }
+  .kpis-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  main, .rodape, .cabecalho-interno, .barra-periodo { padding-left: 16px; padding-right: 16px; }
+  .kpis-2, .kpis-5 { grid-template-columns: 1fr; }
+}

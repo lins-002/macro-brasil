@@ -3,186 +3,240 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Macro Brasil</title>
-  <meta name="description" content="Indicadores da macroeconomia brasileira: IPCA, Selic, combustíveis e mais.">
+  <title>Pulso Macro - indicadores da economia brasileira</title>
+  <meta name="description" content="IPCA, Selic, PIB, dólar, desemprego, combustíveis e mais: indicadores da economia brasileira atualizados automaticamente a partir de fontes oficiais.">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="topo">
-    <h1>Macro Brasil</h1>
-    <p class="sub">Indicadores da economia brasileira, direto das fontes oficiais.</p>
+  <header class="cabecalho">
+    <div class="cabecalho-interno">
+      <a class="marca" href="#juros" aria-label="Pulso Macro, ir para o início">
+        <svg class="marca-icone" viewBox="0 0 36 28" width="36" height="28" aria-hidden="true">
+          <rect x="0"  y="14" width="4.5" height="14" rx="1" fill="#3c8fb4"/>
+          <rect x="6.3" y="8"  width="4.5" height="20" rx="1" fill="#00abc0"/>
+          <rect x="12.6" y="2" width="4.5" height="26" rx="1" fill="#00c5ba"/>
+          <rect x="18.9" y="10" width="4.5" height="18" rx="1" fill="#5cdca3"/>
+          <rect x="25.2" y="5" width="4.5" height="23" rx="1" fill="#a9ee86"/>
+          <rect x="31.5" y="12" width="4.5" height="16" rx="1" fill="#f9f871"/>
+        </svg>
+        <span class="marca-nome">Pulso Macro</span>
+      </a>
+      <nav class="menu" aria-label="Seções do site">
+        <a class="aba" href="#juros" data-secao="juros">Juros e inflação</a>
+        <a class="aba" href="#macro" data-secao="macro">Macroeconomia</a>
+        <a class="aba" href="#combustiveis" data-secao="combustiveis">Combustíveis</a>
+        <a class="aba" href="#breve" data-secao="breve">Outras categorias</a>
+      </nav>
+    </div>
+    <div class="faixa-paleta" aria-hidden="true"></div>
   </header>
 
-  <main>
-    <section class="kpis" aria-label="Indicadores atuais">
-      <article class="kpi" id="kpi-ipca">
-        <h2>IPCA acumulado em 12 meses</h2>
-        <p class="valor">…</p>
-        <p class="detalhe">Carregando</p>
-      </article>
-      <article class="kpi" id="kpi-selic">
-        <h2>Meta Selic</h2>
-        <p class="valor">…</p>
-        <p class="detalhe">Carregando</p>
-      </article>
-      <article class="kpi" id="kpi-gasolina">
-        <h2>Gasolina comum (média Brasil)</h2>
-        <p class="valor">…</p>
-        <p class="detalhe">Carregando</p>
-      </article>
-    </section>
-
+  <div class="barra-periodo" id="barra-periodo">
     <div class="controles" role="group" aria-label="Período dos gráficos">
-      <span>Período dos gráficos:</span>
+      <span>Período dos gráficos</span>
       <button type="button" data-anos="5">5 anos</button>
       <button type="button" data-anos="10">10 anos</button>
       <button type="button" data-anos="20" class="ativo">20 anos</button>
       <button type="button" data-anos="0">Tudo</button>
     </div>
+  </div>
 
-    <section class="cartao">
-      <h2>IPCA acumulado em 12 meses</h2>
-      <p class="fonte">Fonte: IBGE / Banco Central (SGS 13522)</p>
-      <div class="grafico"><canvas id="grafico-ipca" role="img" aria-label="Gráfico do IPCA acumulado em 12 meses"></canvas></div>
-      <p class="erro" id="erro-ipca" hidden></p>
-    </section>
+  <main>
+    <!-- ============ Juros e inflação ============ -->
+    <section class="secao" id="sec-juros" aria-labelledby="t-juros">
+      <h2 class="titulo-secao" id="t-juros">Juros e inflação</h2>
+      <p class="intro">IPCA, meta Selic e o que o mercado espera para os próximos anos.</p>
 
-    <section class="cartao">
-      <h2>Meta Selic</h2>
-      <p class="fonte">Fonte: Banco Central (SGS 432)</p>
-      <div class="grafico"><canvas id="grafico-selic" role="img" aria-label="Gráfico da meta Selic"></canvas></div>
-      <p class="erro" id="erro-selic" hidden></p>
-    </section>
-
-    <h2 class="titulo-secao">Mercado e atividade</h2>
-
-    <section class="kpis" aria-label="Mercado e atividade">
-      <article class="kpi" id="kpi-dolar">
-        <h2>Dólar (venda)</h2>
-        <p class="valor">…</p>
-        <p class="detalhe">Carregando</p>
-      </article>
-      <article class="kpi" id="kpi-desemprego">
-        <h2>Taxa de desemprego</h2>
-        <p class="valor">…</p>
-        <p class="detalhe">Carregando</p>
-      </article>
-      <article class="kpi" id="kpi-pib">
-        <h2>PIB (último trimestre)</h2>
-        <p class="valor">…</p>
-        <p class="detalhe">Carregando</p>
-      </article>
-      <article class="kpi" id="kpi-ibcbr">
-        <h2>IBC-Br (atividade)</h2>
-        <p class="valor">…</p>
-        <p class="detalhe">Carregando</p>
-      </article>
-      <article class="kpi" id="kpi-divida_bruta">
-        <h2>Dívida bruta (% do PIB)</h2>
-        <p class="valor">…</p>
-        <p class="detalhe">Carregando</p>
-      </article>
-    </section>
-
-    <div class="grade-graficos">
-      <section class="cartao">
-        <h2>Dólar comercial (venda)</h2>
-        <p class="fonte">Cotação diária em R$. Fonte: Banco Central (SGS 1)</p>
-        <div class="grafico"><canvas id="grafico-dolar" role="img" aria-label="Gráfico da cotação do dólar"></canvas></div>
-        <p class="erro" id="erro-dolar" hidden></p>
-      </section>
-
-      <section class="cartao">
-        <h2>Taxa de desemprego</h2>
-        <p class="fonte">PNAD Contínua, em %. Fonte: IBGE / Banco Central (SGS 24369)</p>
-        <div class="grafico"><canvas id="grafico-desemprego" role="img" aria-label="Gráfico da taxa de desemprego"></canvas></div>
-        <p class="erro" id="erro-desemprego" hidden></p>
-      </section>
-
-      <section class="cartao">
-        <h2>IBC-Br</h2>
-        <p class="fonte">Prévia mensal do PIB, com ajuste sazonal (2002 = 100). Fonte: Banco Central (SGS 24364)</p>
-        <div class="grafico"><canvas id="grafico-ibcbr" role="img" aria-label="Gráfico do IBC-Br"></canvas></div>
-        <p class="erro" id="erro-ibcbr" hidden></p>
-      </section>
-
-      <section class="cartao">
-        <h2>Dívida bruta do governo geral</h2>
-        <p class="fonte">Colunas: saldo em R$ trilhões (eixo esquerdo). Linha: % do PIB (eixo direito). Fonte: Banco Central (SGS 13761 e 13762)</p>
-        <div class="grafico"><canvas id="grafico-divida_bruta" role="img" aria-label="Gráfico da dívida bruta: saldo em reais (colunas) e percentual do PIB (linha)"></canvas></div>
-        <p class="erro" id="erro-divida_bruta" hidden></p>
-      </section>
-    </div>
-
-    <div class="grade-graficos grade-pib">
-      <section class="cartao">
-        <h2>PIB por ano</h2>
-        <p class="fonte">Colunas: PIB nominal em R$ trilhões (eixo esquerdo). Linha: crescimento real em % (eixo direito). Fonte: IBGE (Contas Nacionais Trimestrais)</p>
-        <div class="grafico"><canvas id="grafico-pib-ano" role="img" aria-label="Gráfico do PIB anual: valor nominal em reais (colunas) e crescimento percentual (linha)"></canvas></div>
-        <p class="nota" id="nota-pib-ano"></p>
-        <p class="erro" id="erro-pib-ano" hidden></p>
-      </section>
-    </div>
-
-    <section class="cartao" id="cartao-focus">
-      <h2>O que o mercado espera (Boletim Focus)</h2>
-      <p class="fonte" id="fonte-focus">Fonte: Banco Central - Expectativas de Mercado (mediana)</p>
-      <div class="tabela-rolavel">
-        <table class="tabela" id="tabela-focus">
-          <thead></thead>
-          <tbody></tbody>
-        </table>
+      <div class="kpis kpis-2">
+        <article class="kpi" id="kpi-ipca">
+          <h3>IPCA acumulado em 12 meses</h3>
+          <p class="valor">…</p>
+          <p class="detalhe">Carregando</p>
+        </article>
+        <article class="kpi" id="kpi-selic">
+          <h3>Meta Selic</h3>
+          <p class="valor">…</p>
+          <p class="detalhe">Carregando</p>
+        </article>
       </div>
-      <p class="nota">A seta compara com a mediana de cerca de 4 semanas antes.</p>
-      <p class="erro" id="erro-focus" hidden></p>
+
+      <div class="grade-graficos">
+        <section class="cartao">
+          <h3>IPCA acumulado em 12 meses</h3>
+          <p class="fonte">Fonte: IBGE / Banco Central (SGS 13522)</p>
+          <div class="grafico"><canvas id="grafico-ipca" role="img" aria-label="Gráfico do IPCA acumulado em 12 meses"></canvas></div>
+          <p class="erro" id="erro-ipca" hidden></p>
+        </section>
+
+        <section class="cartao">
+          <h3>Meta Selic</h3>
+          <p class="fonte">Fonte: Banco Central (SGS 432)</p>
+          <div class="grafico"><canvas id="grafico-selic" role="img" aria-label="Gráfico da meta Selic"></canvas></div>
+          <p class="erro" id="erro-selic" hidden></p>
+        </section>
+      </div>
+
+      <section class="cartao" id="cartao-focus">
+        <h3>O que o mercado espera (Boletim Focus)</h3>
+        <p class="fonte" id="fonte-focus">Fonte: Banco Central - Expectativas de Mercado (mediana)</p>
+        <div class="tabela-rolavel">
+          <table class="tabela" id="tabela-focus">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="nota">A seta compara com a mediana de cerca de 4 semanas antes.</p>
+        <p class="erro" id="erro-focus" hidden></p>
+      </section>
     </section>
 
-    <h2 class="titulo-secao">Combustíveis</h2>
+    <!-- ============ Macroeconomia ============ -->
+    <section class="secao" id="sec-macro" aria-labelledby="t-macro" hidden>
+      <h2 class="titulo-secao" id="t-macro">Macroeconomia</h2>
+      <p class="intro">Atividade, emprego, câmbio e contas públicas.</p>
 
-    <section class="cartao" id="cartao-comb">
-      <h2>Preço dos combustíveis</h2>
-      <p class="fonte" id="fonte-comb">Fonte: ANP - Levantamento de Preços de Combustíveis e de GLP</p>
+      <div class="kpis kpis-5">
+        <article class="kpi" id="kpi-pib">
+          <h3>PIB (último trimestre)</h3>
+          <p class="valor">…</p>
+          <p class="detalhe">Carregando</p>
+        </article>
+        <article class="kpi" id="kpi-ibcbr">
+          <h3>IBC-Br (atividade)</h3>
+          <p class="valor">…</p>
+          <p class="detalhe">Carregando</p>
+        </article>
+        <article class="kpi" id="kpi-desemprego">
+          <h3>Taxa de desemprego</h3>
+          <p class="valor">…</p>
+          <p class="detalhe">Carregando</p>
+        </article>
+        <article class="kpi" id="kpi-dolar">
+          <h3>Dólar (venda)</h3>
+          <p class="valor">…</p>
+          <p class="detalhe">Carregando</p>
+        </article>
+        <article class="kpi" id="kpi-divida_bruta">
+          <h3>Dívida bruta (% do PIB)</h3>
+          <p class="valor">…</p>
+          <p class="detalhe">Carregando</p>
+        </article>
+      </div>
 
-      <div class="filtros">
-        <label class="campo">
-          <span>Estado</span>
-          <select id="comb-uf" aria-label="Estado"></select>
-        </label>
-        <label class="campo">
-          <span>De</span>
-          <input type="month" id="comb-de" placeholder="AAAA-MM">
-        </label>
-        <label class="campo">
-          <span>Até</span>
-          <input type="month" id="comb-ate" placeholder="AAAA-MM">
-        </label>
-        <div class="campo">
-          <span>Atalhos</span>
-          <div class="atalhos" id="comb-atalhos">
-            <button type="button" data-meses="12">1 ano</button>
-            <button type="button" data-meses="60">5 anos</button>
-            <button type="button" data-meses="120">10 anos</button>
-            <button type="button" data-meses="0" class="ativo">Tudo</button>
+      <div class="grade-graficos">
+        <section class="cartao largo">
+          <h3>PIB por ano</h3>
+          <p class="fonte">Colunas: PIB nominal em R$ trilhões (eixo esquerdo). Linha: crescimento real em % (eixo direito). Fonte: IBGE (Contas Nacionais Trimestrais)</p>
+          <div class="grafico"><canvas id="grafico-pib-ano" role="img" aria-label="Gráfico do PIB anual: valor nominal em reais (colunas) e crescimento percentual (linha)"></canvas></div>
+          <p class="nota" id="nota-pib-ano"></p>
+          <p class="erro" id="erro-pib-ano" hidden></p>
+        </section>
+
+        <section class="cartao">
+          <h3>IBC-Br</h3>
+          <p class="fonte">Prévia mensal do PIB, com ajuste sazonal (2002 = 100). Fonte: Banco Central (SGS 24364)</p>
+          <div class="grafico"><canvas id="grafico-ibcbr" role="img" aria-label="Gráfico do IBC-Br"></canvas></div>
+          <p class="erro" id="erro-ibcbr" hidden></p>
+        </section>
+
+        <section class="cartao">
+          <h3>Taxa de desemprego</h3>
+          <p class="fonte">PNAD Contínua, em %. Fonte: IBGE / Banco Central (SGS 24369)</p>
+          <div class="grafico"><canvas id="grafico-desemprego" role="img" aria-label="Gráfico da taxa de desemprego"></canvas></div>
+          <p class="erro" id="erro-desemprego" hidden></p>
+        </section>
+
+        <section class="cartao">
+          <h3>Dólar comercial (venda)</h3>
+          <p class="fonte">Cotação diária em R$. Fonte: Banco Central (SGS 1)</p>
+          <div class="grafico"><canvas id="grafico-dolar" role="img" aria-label="Gráfico da cotação do dólar"></canvas></div>
+          <p class="erro" id="erro-dolar" hidden></p>
+        </section>
+
+        <section class="cartao">
+          <h3>Dívida bruta do governo geral</h3>
+          <p class="fonte">Colunas: saldo em R$ trilhões (eixo esquerdo). Linha: % do PIB (eixo direito). Fonte: Banco Central (SGS 13761 e 13762)</p>
+          <div class="grafico"><canvas id="grafico-divida_bruta" role="img" aria-label="Gráfico da dívida bruta: saldo em reais (colunas) e percentual do PIB (linha)"></canvas></div>
+          <p class="erro" id="erro-divida_bruta" hidden></p>
+        </section>
+      </div>
+    </section>
+
+    <!-- ============ Combustíveis ============ -->
+    <section class="secao" id="sec-combustiveis" aria-labelledby="t-comb" hidden>
+      <h2 class="titulo-secao" id="t-comb">Combustíveis</h2>
+      <p class="intro">Preço médio de revenda ao consumidor, por mês, estado e tipo de combustível.</p>
+
+      <div class="kpis kpis-2">
+        <article class="kpi" id="kpi-gasolina">
+          <h3>Gasolina comum (média Brasil)</h3>
+          <p class="valor">…</p>
+          <p class="detalhe">Carregando</p>
+        </article>
+      </div>
+
+      <section class="cartao" id="cartao-comb">
+        <h3>Preço dos combustíveis</h3>
+        <p class="fonte" id="fonte-comb">Fonte: ANP - Levantamento de Preços de Combustíveis e de GLP</p>
+
+        <div class="filtros">
+          <label class="campo">
+            <span>Estado</span>
+            <select id="comb-uf" aria-label="Estado"></select>
+          </label>
+          <label class="campo">
+            <span>De</span>
+            <input type="month" id="comb-de" placeholder="AAAA-MM">
+          </label>
+          <label class="campo">
+            <span>Até</span>
+            <input type="month" id="comb-ate" placeholder="AAAA-MM">
+          </label>
+          <div class="campo">
+            <span>Atalhos</span>
+            <div class="atalhos" id="comb-atalhos">
+              <button type="button" data-meses="12">1 ano</button>
+              <button type="button" data-meses="60">5 anos</button>
+              <button type="button" data-meses="120">10 anos</button>
+              <button type="button" data-meses="0" class="ativo">Tudo</button>
+            </div>
           </div>
         </div>
+
+        <div class="chips" id="comb-produtos" role="group" aria-label="Tipos de combustível"></div>
+
+        <div class="grafico alto"><canvas id="grafico-comb" role="img" aria-label="Gráfico do preço médio mensal dos combustíveis"></canvas></div>
+        <p class="nota" id="nota-comb">Preço médio de revenda ao consumidor, por mês. GNV é cobrado em R$/m³ e o GLP em R$ por botijão de 13 kg (o GLP aparece sozinho no gráfico); os demais, em R$/litro.</p>
+        <p class="erro" id="erro-comb" hidden></p>
+      </section>
+    </section>
+
+    <!-- ============ Outras categorias ============ -->
+    <section class="secao" id="sec-breve" aria-labelledby="t-breve" hidden>
+      <h2 class="titulo-secao" id="t-breve">Outras categorias</h2>
+      <p class="intro">O que vem a seguir. As seções novas aparecem aqui primeiro.</p>
+      <div class="grade-graficos">
+        <section class="cartao em-breve">
+          <h3>Inflação por grupos</h3>
+          <p>De onde vem o IPCA: alimentação, habitação, transportes e os outros grupos do IBGE, mês a mês.</p>
+        </section>
+        <section class="cartao em-breve">
+          <h3>Cesta básica</h3>
+          <p>Custo mensal da cesta básica nas capitais, a partir dos dados do DIEESE.</p>
+        </section>
       </div>
-
-      <div class="chips" id="comb-produtos" role="group" aria-label="Tipos de combustível"></div>
-
-      <div class="grafico alto"><canvas id="grafico-comb" role="img" aria-label="Gráfico do preço médio mensal dos combustíveis"></canvas></div>
-      <p class="nota" id="nota-comb">Preço médio de revenda ao consumidor, por mês. GNV é cobrado em R$/m³ e o GLP em R$ por botijão de 13 kg (o GLP aparece sozinho no gráfico); os demais, em R$/litro.</p>
-      <p class="erro" id="erro-comb" hidden></p>
     </section>
   </main>
 
   <footer class="rodape">
-    <p>Projeto pessoal, sem fins comerciais. Dados públicos do Banco Central do Brasil, do IBGE e da ANP.</p>
+    <p>Dados públicos do Banco Central do Brasil, do IBGE e da ANP. Conteúdo informativo, que não constitui recomendação de investimento.</p>
     <p id="verificado"></p>
     <p id="atualizado"></p>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="nav.js"></script>
   <script src="app.js"></script>
   <script src="pib.js"></script>
   <script src="combustiveis.js"></script>
